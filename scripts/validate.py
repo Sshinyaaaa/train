@@ -49,6 +49,14 @@ def validate(net, today=None):
         if len(seen.get(s, [])) != 1:
             errors.append(f"stop {s} is in {len(seen.get(s, []))} stations (expected 1)")
 
+    # every line needs display metadata (the UI never shows raw GTFS codes)
+    for lid, line in lines.items():
+        d = line.get("display")
+        if not d or not d.get("number") or not d.get("name"):
+            errors.append(f"{lid}: missing display metadata (overrides/display.json)")
+        if not line.get("color"):
+            errors.append(f"{lid}: no colour")
+
     # KTMB scope
     for lid in lines:
         if lid.startswith("ktmb:") and lid not in KTMB_ALLOWED:

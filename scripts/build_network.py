@@ -252,6 +252,13 @@ def build(today):
     stops.update(ktm_stops)
     manual_lines, manual_notes = load_manual_lines(stops)
     lines = {**rapid_lines, **ktm_lines, **manual_lines}
+    display = json.loads((OVERRIDES / "display.json").read_text(encoding="utf-8"))["lines"]
+    for lid, line in lines.items():
+        d = display.get(lid)
+        if d:
+            line["display"] = {"number": d["number"], "name": d["name"], "label": f"{d['number']} · {d['name']}"}
+            if not line.get("color") and d.get("color"):
+                line["color"], line["color_source"] = d["color"], "display_approx"
     transfers = load_transfers(stops)
     stations = group_stations(stops, transfers)
 

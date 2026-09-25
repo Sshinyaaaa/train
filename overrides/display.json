@@ -1,0 +1,17 @@
+{
+ "_source": "Line numbers and names from the reference map legend (docs/reference/transit-map-2026-06.pdf). Colours here only fill lines whose data has none; they are approximations of the map, not official values.",
+ "lines": {
+  "ktmb:KC05_KB18": {"number": "1", "name": "KTM Batu Caves–Pulau Sebang"},
+  "ktmb:KA15_KD19": {"number": "2", "name": "KTM Tanjung Malim–Pelabuhan Klang"},
+  "rapid:AG": {"number": "3", "name": "LRT Ampang Line"},
+  "rapid:PH": {"number": "4", "name": "LRT Sri Petaling Line"},
+  "rapid:KJ": {"number": "5", "name": "LRT Kelana Jaya Line"},
+  "erl-klia-ekspres": {"number": "6", "name": "ERL KLIA Ekspres", "color": "#8b3f96"},
+  "erl-klia-transit": {"number": "7", "name": "ERL KLIA Transit", "color": "#1aa3b0"},
+  "rapid:MR": {"number": "8", "name": "KL Monorail Line"},
+  "rapid:KGL": {"number": "9", "name": "MRT Kajang Line"},
+  "rapid:SA": {"number": "11", "name": "LRT Shah Alam Line"},
+  "rapid:PYL": {"number": "12", "name": "MRT Putrajaya Line"},
+  "rapid:BRT": {"number": "B1", "name": "BRT Sunway"}
+ }
+}

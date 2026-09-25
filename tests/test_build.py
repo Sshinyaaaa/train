@@ -49,7 +49,7 @@ def tiny_net():
         "meta": {"feeds": {"f": {"calendar_end": "2030-01-01", "days_left": 1000}}},
         "stops": stops,
         "stations": {"st:" + s: {"stops": [s]} for s in stops},
-        "lines": {"x:L": {"patterns": [{"dir": 0, "stops": ["x:a", "x:b"], "run_sec": [0, 60], "run_source": "gtfs",
+        "lines": {"x:L": {"color": "#000", "display": {"number": "1", "name": "Test"}, "patterns": [{"dir": 0, "stops": ["x:a", "x:b"], "run_sec": [0, 60], "run_source": "gtfs",
                                         "headways": {"weekday": [[0, 1, 1]], "saturday": [[0, 1, 1]], "sunday": [[0, 1, 1]]}}]}},
         "transfers": [],
     }
@@ -75,9 +75,14 @@ class Validation(unittest.TestCase):
         self.assertTrue(any("segment" in e for e in errs))
         self.assertTrue(any("no headway for sunday" in e for e in errs))
 
+    def test_missing_display_metadata(self):
+        net = tiny_net()
+        del net["lines"]["x:L"]["display"]
+        self.assertTrue(any("missing display metadata" in e for e in self.errors(net)))
+
     def test_out_of_scope_ktmb_line(self):
         net = tiny_net()
-        net["lines"]["ktmb:ETS"] = {"patterns": []}
+        net["lines"]["ktmb:ETS"] = {"color": "#000", "display": {"number": "x", "name": "x"}, "patterns": []}
         self.assertTrue(any("out-of-scope KTMB line ktmb:ETS" in e for e in self.errors(net)))
 
     def test_stale_is_warning_not_error(self):

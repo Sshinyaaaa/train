@@ -190,6 +190,10 @@ timetable; waiting is estimated.
   - KTM 1 ↔ KTM 2 at a shared stop (e.g. `ktmb:19100`) needs no transfer edge. Alighting and
     re-boarding costs only the new wait.
 - **Origin/destination:** every line-stop of the station, at cost 0.
+- **No station twice:** a route may not return to a station it has left. Stations passed through
+  on a train count. This is checked per label on its own path.
+  - It does **not** stop the Rasa / Kuala Kubu Bharu turn-back (§2). The southbound pattern
+    doesn't stop there, so the path never revisits them.
 - **Routes returned:**
   - *Fastest*: Dijkstra on minutes.
   - *Fewest transfers*: Dijkstra on (boardings, minutes).
@@ -201,6 +205,16 @@ timetable; waiting is estimated.
   - `expected_min`: `journey_min` plus the initial wait (headway / 2 at the first boarding).
   - The UI shows both. Tests assert against `journey_min`.
   - Dijkstra minimises `expected_min`, so the initial wait still affects which line is chosen.
+- **Waits shown in the UI:**
+  - "~`journey_min` + up to X min wait", where X = `initial_headway_min`, the full headway at the
+    first boarding (worst case).
+  - Transfer waits (`transfer_wait_min`, half-headway averages) are shown separately when there
+    are any.
+  - `expected_min` still uses half-headway averages throughout.
+- **Line labels:** the UI never shows raw GTFS codes. `overrides/display.json` gives each line its
+  reference-map number and full name, e.g. "12 · MRT Putrajaya Line" or "B1 · BRT Sunway". The build
+  copies them to `lines[*].display`, and validation errors if any are missing. The same file
+  supplies the approximate ERL colours (`color_source: "display_approx"`).
 - **Output:**
   - Legs are line, from, to, stop count, ride time, and wait.
   - Transfers show walk time, and an "exits fare gates" flag when `exits_gates` is true.
@@ -275,24 +289,34 @@ and the site shows a banner.
   - Unverified misses are printed as `WARNING` diagnostics.
   - Structural tests cover journey vs expected, transfer waits, estimate flags, KTM shared-stop
     changes, no service outside hours, and bands past 24:00.
+  - No station twice: a synthetic network whose only path revisits a station returns no route.
+    Real station pairs are also swept to check no returned route revisits one.
 - `node tests/known-routes-report.mjs` prints a markdown table of every case.
 
 ## 7. GitHub Action (`.github/workflows/pages.yml`, M3)
 
-`data/raw/` isn't committed, so CI can't rebuild from the feeds. `site/data/network.json` is built
-locally (`python scripts/build_network.py`) and committed. It is the last good data.
+**Triggers:** push to `main`, weekly (Monday 02:17 UTC), and manual dispatch. **No secrets:** the
+feeds are public and Pages uses the built-in OIDC token.
 
-On push to `main` and on manual dispatch, the Action:
-1. Runs `python scripts/validate.py`, which recomputes staleness against today.
-2. Runs `python -m unittest discover -s tests`. The real-feed tests skip.
-3. Runs `node --test tests/*.test.mjs`.
-4. **On errors or failing tests:** fails and doesn't deploy. The live site keeps the last good
-   deployment.
-5. **On stale-feed warnings:** emits `::warning::` and **still deploys**. KTMB's calendar ends
-   2026-10-10, and the site banner shows the stale state.
-6. Deploys `site/` with `actions/upload-pages-artifact` + `actions/deploy-pages`.
+The Action:
+1. Downloads both feeds from the data.gov.my GTFS static API. No key is documented.
+   - `https://api.data.gov.my/gtfs-static/ktmb`
+   - `https://api.data.gov.my/gtfs-static/prasarana?category=rapid-rail-kl`
 
-Refreshing the feeds is manual: replace `data/raw/`, rebuild, commit `network.json`.
+   It unzips them into `data/raw/`, skipping `__MACOSX/`.
+2. Runs `build_network.py`, which also validates, into a temp file, then copies the result to
+   `site/data/network.json`.
+3. **If the fetch or the build fails:** restores the committed `site/data/network.json` (the last
+   good data), deletes `data/raw/` so the real-feed tests skip, and emits a `::warning::`
+   annotation.
+4. Runs `validate.py` on the final `network.json`, recomputing staleness against today. Stale
+   feeds become `::warning::` annotations, and the Action **still deploys**.
+5. Runs the Python and Node tests. **A test failure fails the run and nothing deploys.** The live
+   site keeps the previous deployment.
+6. Deploys `site/` with `configure-pages` → `upload-pages-artifact` → `deploy-pages`.
+
+A freshly built `network.json` is deployed but not committed back, so the committed copy is the
+fallback. To update it, rebuild locally and commit.
 
 ## 8. Milestones
 
@@ -306,7 +330,7 @@ Refreshing the feeds is manual: replace `data/raw/`, rebuild, commit `network.js
    - `router.js` (both route types, estimate flags, fare-gate flag)
    - a minimal page with station pickers, day type and time
    - `router.test.mjs` with `known-routes.json`
-4. **M3 – deploy:** the Pages Action described in section 7.
+4. **M3 – deploy — DONE:** the Pages Action described in section 7.
 5. **M4 – timetable-aware KTM:** real departures (next train after arrival) instead of headway / 2,
    respecting `calendar_dates`.
 6. **Later / optional:**
@@ -314,4 +338,3 @@ Refreshing the feeds is manual: replace `data/raw/`, rebuild, commit `network.js
    - Ekspres all-stop after 23:00
    - Transit peak headway once the peak hours are known
    - merging the AG/SP shared trunk
-   - fetching feeds in CI

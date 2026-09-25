@@ -90,13 +90,25 @@ function search(g, fromStation, toStation, query, mode) {
   const best = new Map();
   const heap = new Heap(less);
   const targets = new Set(net.stations[toStation].stops);
+  const stationOf = (stop) => net.stops[stop].station;
+  const seen = (chain, st) => { for (let c = chain; c; c = c.prev) if (c.st === st) return true; return false; };
   for (const s of net.stations[fromStation].stops) {
-    const l = { state: `s|${s}`, cost: 0, boardings: 0, initialWait: 0, initialHeadway: 0, prev: null, edge: null };
+    const l = { state: `s|${s}`, cost: 0, boardings: 0, initialWait: 0, initialHeadway: 0, prev: null, edge: null,
+                station: fromStation, visited: { st: fromStation, prev: null } };
     best.set(l.state, l); heap.push(l);
   }
-  const relax = (from, state, dcost, edge, extra = {}) => {
+  // A route may not return to a station it has already left (stations passed through on a train
+  // count). The check is on each label's own path; with one best label per state this is a
+  // heuristic rather than an exact constrained shortest path, which is fine at this network size.
+  const relax = (from, state, stop, dcost, edge, extra = {}) => {
+    const st = stationOf(stop);
+    let visited = from.visited;
+    if (st !== from.station) {
+      if (seen(visited, st)) return;
+      visited = { st, prev: visited };
+    }
     const l = { state, cost: from.cost + dcost, boardings: from.boardings, initialWait: from.initialWait,
-                initialHeadway: from.initialHeadway, prev: from, edge, ...extra };
+                initialHeadway: from.initialHeadway, prev: from, edge, station: st, visited, ...extra };
     const cur = best.get(state);
     if (!cur || less(l, cur)) { best.set(state, l); heap.push(l); }
   };
@@ -112,19 +124,19 @@ function search(g, fromStation, toStation, query, mode) {
         const hw = headwayAt(p, query.day, t0 + l.cost);
         if (hw == null) continue;
         const wait = hw / 2, first = l.boardings === 0;
-        relax(l, `p|${b.line}|${b.pi}|${b.i}`, wait, { type: "board", line: b.line, pi: b.pi, i: b.i, wait, headway: hw },
+        relax(l, `p|${b.line}|${b.pi}|${b.i}`, stop, wait, { type: "board", line: b.line, pi: b.pi, i: b.i, wait, headway: hw },
               { boardings: l.boardings + 1, initialWait: first ? wait : l.initialWait, initialHeadway: first ? hw : l.initialHeadway });
       }
       for (const { to, t } of g.transfers.get(stop) || []) {
-        relax(l, `s|${to}`, transferCost(g, t), { type: "transfer", from: stop, to, t });
+        relax(l, `s|${to}`, to, transferCost(g, t), { type: "transfer", from: stop, to, t });
       }
     } else {
       const [, line, piS, iS] = parts;
       const pi = Number(piS), i = Number(iS);
       const p = net.lines[line].patterns[pi];
-      relax(l, `s|${p.stops[i]}`, 0, { type: "alight", line, pi, i });
+      relax(l, `s|${p.stops[i]}`, p.stops[i], 0, { type: "alight", line, pi, i });
       if (i + 1 < p.stops.length) {
-        relax(l, `p|${line}|${pi}|${i + 1}`, p.run_sec[i + 1] - p.run_sec[i], { type: "ride", line, pi, from: i, to: i + 1 });
+        relax(l, `p|${line}|${pi}|${i + 1}`, p.stops[i + 1], p.run_sec[i + 1] - p.run_sec[i], { type: "ride", line, pi, from: i, to: i + 1 });
       }
     }
   }
@@ -143,7 +155,8 @@ function buildRoute(g, label) {
   for (const e of edges) {
     if (e.type === "board") {
       const line = net.lines[e.line], p = line.patterns[e.pi];
-      ride = { type: "ride", line: e.line, line_name: line.name, line_short: line.short, color: line.color,
+      ride = { type: "ride", line: e.line, line_label: line.display?.label ?? line.name,
+               line_number: line.display?.number ?? "", line_name: line.display?.name ?? line.name, color: line.color,
                towards: p.stops[p.stops.length - 1], from: p.stops[e.i], to: p.stops[e.i], stops: [p.stops[e.i]],
                ride_min: 0, wait_min: round1(e.wait), headway_min: round1(e.headway),
                run_source: p.run_source, headway_source: p.headway_source, flags: [], _start: p.run_sec[e.i] };
@@ -181,13 +194,21 @@ function buildRoute(g, label) {
     expected_min: round1(label.cost),
     journey_min: round1(label.cost - label.initialWait),
     initial_wait_min: round1(label.initialWait),
-    initial_headway_min: round1(label.initialHeadway),
+    initial_headway_min: round1(label.initialHeadway),   // worst-case first wait ("up to")
+    transfer_wait_min: Math.round(rides.slice(1).reduce((a, r) => a + r.wait_min, 0) * 10) / 10,
+    stations: stationsVisited(label),
     transfers: Math.max(0, rides.length - 1),
     lines: rides.map(r => r.line),
     legs: withChanges,
     flags,
     uses_estimate: flags.some(f => f.startsWith("estimated") || f === "typical_headway"),
   };
+}
+
+function stationsVisited(label) {
+  const out = [];
+  for (let c = label.visited; c; c = c.prev) out.push(c.st);
+  return out.reverse();
 }
 
 // Returns { fastest, fewest, same } or null if no route. fewest is null when identical to fastest.

@@ -64,10 +64,14 @@ input:focus, select:focus, .swap:focus { outline: 2px solid var(--accent); outli
 }
 .suggest li { padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
 .suggest li[aria-selected=true], .suggest li:hover { background: var(--bg); }
-.suggest .name { flex: 1; }
-.suggest .lines { color: var(--muted); font-size: .75rem; text-align: right; }
-.dots { display: inline-flex; gap: 3px; }
-.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.suggest .name { flex: 1; min-width: 0; }
+.suggest .lines { display: block; color: var(--muted); font-size: .75rem; }
+.badges { display: inline-flex; gap: 3px; flex: none; }
+.badge {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px;
+  font-size: .72rem; font-weight: 700; line-height: 1;
+}
 
 #results { margin: 16px 0; }
 .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
@@ -94,7 +98,6 @@ input:focus, select:focus, .swap:focus { outline: 2px solid var(--accent); outli
 .stop .body { padding-bottom: 12px; min-height: 26px; }
 .stop .st { font-weight: 600; }
 .stop .detail { color: var(--muted); font-size: .85rem; }
-.pill { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 7px; border-radius: 99px; color: #fff; margin-right: 4px; }
 .est { font-size: .72rem; color: var(--warn-text); background: var(--warn-bg); border-radius: 4px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
 details.stops { font-size: .82rem; color: var(--muted); }
 details.stops summary { cursor: pointer; }

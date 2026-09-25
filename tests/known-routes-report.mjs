@@ -8,7 +8,7 @@ for (const c of loadCases()) {
   const r = evaluate(g, c);
   const f = r.res?.fastest;
   const fewest = r.res?.fewest;
-  const lines = f ? f.lines.map((l) => g.net.lines[l].short).join(" → ") : "—";
+  const lines = f ? f.lines.map((l) => g.net.lines[l].display.label).join(" → ") : "—";
   rows.push([
     `${c.from} → ${c.to}`,
     `${r.query.day} ${r.query.time}`,

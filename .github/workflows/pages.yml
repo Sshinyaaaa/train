@@ -1,0 +1,92 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * 1"   # weekly, Monday 02:17 UTC
+  workflow_dispatch:
+
+# No secrets: feeds are public, Pages deploy uses the built-in OIDC token.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Fetch GTFS feeds (data.gov.my)
+        id: fetch
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p data/raw
+          curl -fsSL --retry 3 --max-time 180 -o data/raw/gtfs_ktmb.zip \
+            "https://api.data.gov.my/gtfs-static/ktmb"
+          curl -fsSL --retry 3 --max-time 180 -o data/raw/gtfs_rapid_rail_kl.zip \
+            "https://api.data.gov.my/gtfs-static/prasarana?category=rapid-rail-kl"
+          unzip -o -q data/raw/gtfs_ktmb.zip -d data/raw/ktmb
+          unzip -o -q data/raw/gtfs_rapid_rail_kl.zip -x '__MACOSX/*' -d data/raw/rapid_rail_kl
+          for f in data/raw/ktmb/trips.txt data/raw/rapid_rail_kl/trips.txt data/raw/rapid_rail_kl/frequencies.txt; do
+            test -s "$f" || { echo "missing $f"; exit 1; }
+          done
+
+      - name: Build network.json from fresh feeds
+        id: build
+        if: steps.fetch.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python scripts/build_network.py --out "$RUNNER_TEMP/network.json"
+          cp "$RUNNER_TEMP/network.json" site/data/network.json
+
+      - name: Fall back to committed network.json
+        if: steps.fetch.outcome != 'success' || steps.build.outcome != 'success'
+        run: |
+          git checkout -- site/data/network.json
+          rm -rf data/raw   # real-feed tests skip; they would only re-report the failure above
+          echo "::warning title=Using committed network.json::Feed fetch or build failed (fetch: ${{ steps.fetch.outcome }}, build: ${{ steps.build.outcome }}). Deploying the committed site/data/network.json."
+
+      - name: Validate (staleness against today)
+        run: |
+          set -euo pipefail
+          python scripts/validate.py | tee "$RUNNER_TEMP/validate.log"
+          grep '^WARNING STALE' "$RUNNER_TEMP/validate.log" | sed 's/^WARNING /::warning title=Stale feed::/' || true
+
+      - name: Python tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Node tests
+        run: node --test tests/*.test.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

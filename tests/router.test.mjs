@@ -1,7 +1,7 @@
-// Router tests. Run: node --test tests/
+// Router tests. Run: node --test tests/*.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { route, headwayAt } from "../site/router.js";
+import { route, headwayAt, loadNetwork } from "../site/router.js";
 import { loadGraph, loadCases, evaluate } from "./known-routes-lib.mjs";
 
 const g = loadGraph();
@@ -62,4 +62,42 @@ test("headway bands past 24:00 match early-morning queries", () => {
 
 test("no service outside operating hours", () => {
   assert.equal(route(g, "st:rapid:KJ1", "st:rapid:KJ10", { day: "weekday", time: "03:00" }), null);
+});
+
+// Tiny network: line L1 A->X->B, line L2 B->X->D. X is one station with two line-stops that have
+// no transfer between them, so the only way from A to D is A->X->B->X->D, which revisits X.
+function revisitNet() {
+  const stop = (id, station) => ({ name: id, lat: 0, lon: 0, lines: [], station });
+  const hw = { weekday: [[0, 86400, 600]], saturday: [[0, 86400, 600]], sunday: [[0, 86400, 600]] };
+  const pat = (stops) => ({ dir: 0, stops, run_sec: stops.map((_, i) => i * 60), run_source: "gtfs", headways: hw, headway_source: "gtfs_frequencies" });
+  return {
+    meta: { gate_penalty_min: 5 },
+    stops: { a: stop("a", "A"), x1: stop("x1", "X"), b: stop("b", "B"), x2: stop("x2", "X"), d: stop("d", "D") },
+    stations: { A: { stops: ["a"] }, X: { stops: ["x1", "x2"] }, B: { stops: ["b"] }, D: { stops: ["d"] } },
+    lines: { L1: { name: "L1", patterns: [pat(["a", "x1", "b"])] }, L2: { name: "L2", patterns: [pat(["b", "x2", "d"])] } },
+    transfers: [],
+  };
+}
+
+test("a route may not visit the same station twice", () => {
+  const g2 = loadNetwork(revisitNet());
+  assert.equal(route(g2, "A", "D"), null, "only path revisits X, so no route");
+  assert.ok(route(g2, "A", "B"), "A -> B is fine");
+});
+
+test("real network: no returned route visits a station twice", () => {
+  const ids = Object.keys(g.net.stations).sort();
+  let checked = 0;
+  for (let i = 0; i < ids.length; i += 7) {
+    for (let j = 3; j < ids.length; j += 11) {
+      if (ids[i] === ids[j]) continue;
+      const res = route(g, ids[i], ids[j]);
+      if (!res) continue;
+      for (const r of [res.fastest, res.fewest].filter(Boolean)) {
+        assert.equal(new Set(r.stations).size, r.stations.length, `${ids[i]} -> ${ids[j]} revisits: ${r.stations.join(" ")}`);
+        checked++;
+      }
+    }
+  }
+  assert.ok(checked > 300, `checked ${checked}`);
 });

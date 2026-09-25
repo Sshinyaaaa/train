@@ -1,8 +1,5 @@
 import { loadNetwork, route, DEFAULT_QUERY } from "./router.js";
 
-// Display-only colours for lines whose data has no colour (ERL lines are manual overrides).
-// Approximations of the reference map, not official values.
-const FALLBACK_COLOR = { "erl-klia-ekspres": "#8b3f96", "erl-klia-transit": "#1aa3b0" };
 const ACRONYMS = new Set(["KL", "KLCC", "KLIA", "PWTC", "UOB", "USJ", "USJ7", "SS", "TRX", "UKM", "UPM", "IOI",
   "CBP", "BU", "BK", "UITM", "KTM", "T1", "T2", "SA", "MRT", "LRT", "DR"]);
 
@@ -12,7 +9,14 @@ const picked = { from: null, to: null };
 let tab = "fastest";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const color = (lid) => net.lines[lid].color || FALLBACK_COLOR[lid] || "#888";
+const color = (lid) => net.lines[lid].color || "#888";
+const lineLabel = (lid) => net.lines[lid].display.label;   // e.g. "12 · MRT Putrajaya Line"
+// Readable text on a line colour (yellow lines need dark text).
+function ink(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 170 ? "#1c1c1c" : "#fff";
+}
+const badge = (lid) => `<span class="badge" style="background:${color(lid)};color:${ink(color(lid))}" title="${esc(lineLabel(lid))}">${esc(net.lines[lid].display.number)}</span>`;
 const fmtMin = (m) => `${Math.round(m)} min`;
 
 function pretty(name) {
@@ -27,7 +31,9 @@ function pretty(name) {
 function stationLines(st) {
   const ids = [];
   for (const s of st.stops) for (const l of net.stops[s].lines) if (!ids.includes(l)) ids.push(l);
-  return ids;
+  // map order: 1..12, then B1
+  const rank = (l) => { const n = net.lines[l].display.number; return /^\d+$/.test(n) ? Number(n) : 100; };
+  return ids.sort((a, b) => rank(a) - rank(b));
 }
 
 function buildIndex() {
@@ -41,8 +47,8 @@ function buildIndex() {
   stations.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const dotsHtml = (lines) => `<span class="dots">${lines.map((l) => `<span class="dot" style="background:${color(l)}" title="${esc(net.lines[l].name)}"></span>`).join("")}</span>`;
-const linesText = (lines) => lines.map((l) => net.lines[l].short).join(" · ");
+const badges = (lines) => `<span class="badges">${lines.map(badge).join("")}</span>`;
+const linesText = (lines) => lines.map((l) => net.lines[l].display.name).join(", ");
 const label = (s) => (s.dup ? `${s.name} (${linesText(s.lines)})` : s.name);
 
 function search(q) {
@@ -63,7 +69,7 @@ function setupPicker(role) {
   const choose = (s) => { picked[role] = s.id; input.value = label(s); close(); save(); render(); };
   const draw = () => {
     list.innerHTML = items.map((s, i) => `<li role="option" id="${role}-opt-${i}" aria-selected="${i === active}" data-i="${i}">
-      ${dotsHtml(s.lines)}<span class="name">${esc(s.name)}</span><span class="lines">${esc(linesText(s.lines))}</span></li>`).join("");
+      ${badges(s.lines)}<span class="name">${esc(s.name)}<span class="lines">${esc(linesText(s.lines))}</span></span></li>`).join("");
     list.hidden = items.length === 0;
     input.setAttribute("aria-expanded", String(!list.hidden));
     if (active >= 0) input.setAttribute("aria-activedescendant", `${role}-opt-${active}`);
@@ -91,7 +97,7 @@ function setPicked(role, id) {
 }
 
 function stopName(sid) { return pretty(net.stops[sid].name); }
-function stopLines(sid) { return net.stops[sid].lines.map((l) => net.lines[l].short).join(" · "); }
+function stopLines(sid) { return net.stops[sid].lines.map(lineLabel).join(", "); }
 
 const FLAG_TEXT = {
   estimated_run: "estimated ride time",
@@ -111,7 +117,7 @@ function journeyHtml(r) {
       const c = color(leg.line);
       const mid = leg.stops.slice(1, -1).map(stopName);
       node(c, false, esc(stopName(leg.from)), r.legs[i - 1]?.kind === "same_stop" ? "Change trains here" : "");
-      seg(c, false, `<span class="pill" style="background:${c}">${esc(leg.line_short)}</span>
+      seg(c, false, `${badge(leg.line)} <strong>${esc(leg.line_name)}</strong><br>
         towards ${esc(stopName(leg.towards))}<br>
         ${leg.first ? `wait up to ${fmtMin(leg.headway_min)}` : `wait ~${fmtMin(leg.wait_min)}`} · ride ${fmtMin(leg.ride_min)}, ${leg.stops.length - 1} stop${leg.stops.length === 2 ? "" : "s"}
         ${estTags(leg.flags)}
@@ -137,7 +143,8 @@ function routeCard(r) {
   return `<div class="card">
     <div class="summary">
       <div class="big">~${fmtMin(r.journey_min)} <span class="meta">+ up to ${fmtMin(r.initial_headway_min)} wait</span></div>
-      <div class="meta">${dotsHtml(lines)} ${changes} · expected ~${fmtMin(r.expected_min)} including average wait</div>
+      <div class="meta">${badges(lines)} ${changes}${r.transfer_wait_min > 0 ? ` · includes ~${fmtMin(r.transfer_wait_min)} waiting at changes` : ""}</div>
+      <div class="meta">Expected ~${fmtMin(r.expected_min)} with an average first wait</div>
     </div>
     ${journeyHtml(r)}
     ${r.uses_estimate ? `<div class="note">This route uses estimated values (marked above). Times may differ from the real service.</div>` : ""}
