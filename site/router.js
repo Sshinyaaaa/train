@@ -1,0 +1,204 @@
+// Rail router over network.json (PLAN.md §4). Plain ES module: works in the browser and in Node.
+//
+// States: "s|<stop>" = standing at a line-stop (not on a train);
+//         "p|<line>|<pattern>|<i>" = on a train at stop index i of a pattern.
+// Edges:  board (wait = headway/2 for the band containing the current clock time),
+//         ride (run_sec difference), alight (0), transfer (walk + gate penalty).
+// Costs are seconds. Waiting at the first boarding is the "initial wait": it counts toward
+// expected_min but not journey_min.
+
+export const DEFAULT_QUERY = { day: "weekday", time: "11:00" };
+
+export function loadNetwork(net) {
+  const boards = new Map();    // stop -> [{line, pi, i}]
+  const transfers = new Map(); // stop -> [{to, t}]
+  for (const [lid, line] of Object.entries(net.lines)) {
+    line.patterns.forEach((p, pi) => {
+      p.stops.forEach((s, i) => {
+        if (i === p.stops.length - 1) return;
+        if (!boards.has(s)) boards.set(s, []);
+        boards.get(s).push({ line: lid, pi, i });
+      });
+    });
+  }
+  for (const t of net.transfers) {
+    for (const [a, b] of [[t.from, t.to], [t.to, t.from]]) {
+      if (!transfers.has(a)) transfers.set(a, []);
+      transfers.get(a).push({ to: b, t });
+    }
+  }
+  return { net, boards, transfers, gatePenaltyMin: net.meta.gate_penalty_min ?? 0 };
+}
+
+export function parseTime(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 3600 + m * 60;
+}
+
+// Headway (s) of a pattern at clock time t (s since service-day midnight), or null if not running.
+// Bands may extend past 24:00 (GTFS), so an early-morning query also checks t + 24 h.
+export function headwayAt(pattern, day, t) {
+  for (const tt of [t, t + 86400]) {
+    for (const [start, end, hw] of pattern.headways[day] || []) {
+      if (tt >= start && tt <= end) return hw;
+    }
+  }
+  return null;
+}
+
+function transferCost(g, t) {
+  return (t.walk_min + (t.exits_gates === true ? g.gatePenaltyMin : 0)) * 60;
+}
+
+class Heap {
+  constructor(less) { this.a = []; this.less = less; }
+  get size() { return this.a.length; }
+  push(x) {
+    const a = this.a; a.push(x);
+    for (let i = a.length - 1; i > 0;) {
+      const p = (i - 1) >> 1;
+      if (!this.less(a[i], a[p])) break;
+      [a[i], a[p]] = [a[p], a[i]]; i = p;
+    }
+  }
+  pop() {
+    const a = this.a, top = a[0], last = a.pop();
+    if (a.length) {
+      a[0] = last;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < a.length && this.less(a[l], a[m])) m = l;
+        if (r < a.length && this.less(a[r], a[m])) m = r;
+        if (m === i) break;
+        [a[i], a[m]] = [a[m], a[i]]; i = m;
+      }
+    }
+    return top;
+  }
+}
+
+// mode "fastest": minimise (expected, boardings); "fewest": minimise (boardings, expected).
+function search(g, fromStation, toStation, query, mode) {
+  const { net } = g;
+  const t0 = parseTime(query.time);
+  const key = mode === "fastest" ? (l) => [l.cost, l.boardings] : (l) => [l.boardings, l.cost];
+  const less = (x, y) => {
+    const a = key(x), b = key(y);
+    return a[0] !== b[0] ? a[0] < b[0] : a[1] < b[1];
+  };
+  const best = new Map();
+  const heap = new Heap(less);
+  const targets = new Set(net.stations[toStation].stops);
+  for (const s of net.stations[fromStation].stops) {
+    const l = { state: `s|${s}`, cost: 0, boardings: 0, initialWait: 0, initialHeadway: 0, prev: null, edge: null };
+    best.set(l.state, l); heap.push(l);
+  }
+  const relax = (from, state, dcost, edge, extra = {}) => {
+    const l = { state, cost: from.cost + dcost, boardings: from.boardings, initialWait: from.initialWait,
+                initialHeadway: from.initialHeadway, prev: from, edge, ...extra };
+    const cur = best.get(state);
+    if (!cur || less(l, cur)) { best.set(state, l); heap.push(l); }
+  };
+  while (heap.size) {
+    const l = heap.pop();
+    if (best.get(l.state) !== l) continue;
+    const parts = l.state.split("|");
+    if (parts[0] === "s") {
+      const stop = parts[1];
+      if (targets.has(stop)) return l;
+      for (const b of g.boards.get(stop) || []) {
+        const p = net.lines[b.line].patterns[b.pi];
+        const hw = headwayAt(p, query.day, t0 + l.cost);
+        if (hw == null) continue;
+        const wait = hw / 2, first = l.boardings === 0;
+        relax(l, `p|${b.line}|${b.pi}|${b.i}`, wait, { type: "board", line: b.line, pi: b.pi, i: b.i, wait, headway: hw },
+              { boardings: l.boardings + 1, initialWait: first ? wait : l.initialWait, initialHeadway: first ? hw : l.initialHeadway });
+      }
+      for (const { to, t } of g.transfers.get(stop) || []) {
+        relax(l, `s|${to}`, transferCost(g, t), { type: "transfer", from: stop, to, t });
+      }
+    } else {
+      const [, line, piS, iS] = parts;
+      const pi = Number(piS), i = Number(iS);
+      const p = net.lines[line].patterns[pi];
+      relax(l, `s|${p.stops[i]}`, 0, { type: "alight", line, pi, i });
+      if (i + 1 < p.stops.length) {
+        relax(l, `p|${line}|${pi}|${i + 1}`, p.run_sec[i + 1] - p.run_sec[i], { type: "ride", line, pi, from: i, to: i + 1 });
+      }
+    }
+  }
+  return null;
+}
+
+const round1 = (sec) => Math.round(sec / 6) / 10;
+
+function buildRoute(g, label) {
+  const { net } = g;
+  const edges = [];
+  for (let l = label; l && l.edge; l = l.prev) edges.push(l.edge);
+  edges.reverse();
+  const legs = [];
+  let ride = null;
+  for (const e of edges) {
+    if (e.type === "board") {
+      const line = net.lines[e.line], p = line.patterns[e.pi];
+      ride = { type: "ride", line: e.line, line_name: line.name, line_short: line.short, color: line.color,
+               towards: p.stops[p.stops.length - 1], from: p.stops[e.i], to: p.stops[e.i], stops: [p.stops[e.i]],
+               ride_min: 0, wait_min: round1(e.wait), headway_min: round1(e.headway),
+               run_source: p.run_source, headway_source: p.headway_source, flags: [], _start: p.run_sec[e.i] };
+      if (p.run_source === "estimated") ride.flags.push("estimated_run");
+      if (p.headway_source === "gtfs_typical") ride.flags.push("typical_headway");
+    } else if (e.type === "ride") {
+      const p = net.lines[e.line].patterns[e.pi];
+      ride.to = p.stops[e.to]; ride.stops.push(p.stops[e.to]);
+      ride.ride_min = round1(p.run_sec[e.to] - ride._start);
+    } else if (e.type === "alight") {
+      delete ride._start;
+      legs.push(ride); ride = null;
+    } else if (e.type === "transfer") {
+      const t = e.t, flags = [];
+      if (t.walk_source === "estimated") flags.push("estimated_walk");
+      if (t.exits_gates == null) flags.push("gates_unknown");
+      legs.push({ type: "transfer", from: e.from, to: e.to, kind: t.kind, walk_min: t.walk_min,
+                  walk_source: t.walk_source, exits_gates: t.exits_gates,
+                  gate_penalty_min: t.exits_gates === true ? g.gatePenaltyMin : 0, flags });
+    }
+  }
+  const rides = legs.filter(x => x.type === "ride");
+  rides.forEach((r, i) => { r.first = i === 0; });
+  // A change between two rides with no walk leg (e.g. KTM 1 <-> KTM 2 at a shared stop).
+  const withChanges = [];
+  legs.forEach((x, i) => {
+    withChanges.push(x);
+    if (x.type === "ride" && legs[i + 1]?.type === "ride") {
+      withChanges.push({ type: "transfer", from: x.to, to: x.to, kind: "same_stop", walk_min: 0,
+                         walk_source: "none", exits_gates: null, gate_penalty_min: 0, flags: [] });
+    }
+  });
+  const flags = [...new Set(withChanges.flatMap(x => x.flags))];
+  return {
+    expected_min: round1(label.cost),
+    journey_min: round1(label.cost - label.initialWait),
+    initial_wait_min: round1(label.initialWait),
+    initial_headway_min: round1(label.initialHeadway),
+    transfers: Math.max(0, rides.length - 1),
+    lines: rides.map(r => r.line),
+    legs: withChanges,
+    flags,
+    uses_estimate: flags.some(f => f.startsWith("estimated") || f === "typical_headway"),
+  };
+}
+
+// Returns { fastest, fewest, same } or null if no route. fewest is null when identical to fastest.
+export function route(g, fromStation, toStation, query = DEFAULT_QUERY) {
+  const q = { ...DEFAULT_QUERY, ...query };
+  if (!g.net.stations[fromStation] || !g.net.stations[toStation]) throw new Error("unknown station");
+  if (fromStation === toStation) return null;
+  const f = search(g, fromStation, toStation, q, "fastest");
+  if (!f) return null;
+  const fastest = buildRoute(g, f);
+  const fewest = buildRoute(g, search(g, fromStation, toStation, q, "fewest"));
+  const same = JSON.stringify(fastest.legs) === JSON.stringify(fewest.legs);
+  return { fastest, fewest: same ? null : fewest, query: q };
+}

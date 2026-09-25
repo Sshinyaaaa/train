@@ -69,12 +69,13 @@ scripts/
   seed_transfers.py           one-off: reviewed draft table -> overrides/transfers.json
   audit_gtfs.py, audit_interchanges.py, inspect_pattern.py   (read-only reports)
 site/
-  index.html, app.js, router.js          (M2)
+  index.html, app.js, style.css, router.js
   data/network.json           committed; last good build
 tests/
   test_build.py               python -m unittest discover -s tests
   known-routes.json           written by hand (owner)
-  router.test.mjs             node --test (M2)
+  router.test.mjs             node --test tests/*.test.mjs
+  known-routes-lib.mjs, known-routes-report.mjs   evaluator + markdown table
 docs/                         audits, review draft, TODO-manual.md
 .github/workflows/pages.yml   (M3)
 ```
@@ -137,6 +138,9 @@ How the fields are built:
   - the `route_id` column in rapid `stop_times.txt`
   - the `category`, `route_id` and `geometry` columns in rapid `stops.txt`
   - unpadded `H:MM:SS` times
+- **Feed quirk kept as-is:** in the KTMB feed, no southbound (`direction_id 1`) `KA15_KD19`
+  trip stops at Kuala Kubu Bharu (`16100`) or Rasa (`16300`). The router therefore goes south from
+  there via Tanjung Malim.
 - **Stations:** union-find over `interchange` transfers, plus KTMB stops already shared by both KTM
   lines. The station name joins the distinct stop names with " / ", treating sponsor suffixes as
   the same name, and prefers the manual line's name when there is one.
@@ -203,7 +207,8 @@ timetable; waiting is estimated.
   - **Every leg or transfer that uses an estimate is flagged**: `run_source: "estimated"`,
     `walk_source: "estimated"`, or `headway_source: "gtfs_typical"` (KTM waits are averages).
 - **Known simplifications:**
-  - One headway band per query.
+  - The headway band is looked up at each boarding using the query time plus elapsed journey
+    time. There is no actual timetable, so waits are averages.
   - AG/SP share track from Sentul Timur to Chan Sow Lin but aren't merged, so the wait there is
     overestimated.
 
@@ -263,8 +268,14 @@ and the site shows a banner.
       figure is unverified.
     - `scripts/inspect_pattern.py` prints per-segment in-train times and dwells for any rapid
       route.
-- `tests/router.test.mjs` (M2) runs `router.js` against `site/data/network.json` and
-  `known-routes.json` with `node --test`.
+- `tests/router.test.mjs` runs `router.js` against `site/data/network.json`
+  (`node --test tests/*.test.mjs`). Node 22 doesn't accept a directory argument.
+  - `max_minutes` is checked against the **fastest** route's `journey_min`.
+  - `max_transfers` is checked against the **fewest-transfers** route.
+  - Unverified misses are printed as `WARNING` diagnostics.
+  - Structural tests cover journey vs expected, transfer waits, estimate flags, KTM shared-stop
+    changes, no service outside hours, and bands past 24:00.
+- `node tests/known-routes-report.mjs` prints a markdown table of every case.
 
 ## 7. GitHub Action (`.github/workflows/pages.yml`, M3)
 
@@ -274,7 +285,7 @@ locally (`python scripts/build_network.py`) and committed. It is the last good d
 On push to `main` and on manual dispatch, the Action:
 1. Runs `python scripts/validate.py`, which recomputes staleness against today.
 2. Runs `python -m unittest discover -s tests`. The real-feed tests skip.
-3. Runs `node --test tests/`.
+3. Runs `node --test tests/*.test.mjs`.
 4. **On errors or failing tests:** fails and doesn't deploy. The live site keeps the last good
    deployment.
 5. **On stale-feed warnings:** emits `::warning::` and **still deploys**. KTMB's calendar ends
@@ -291,7 +302,7 @@ Refreshing the feeds is manual: replace `data/raw/`, rebuild, commit `network.js
    - the first `network.json`
 2. **M1 – transfers (owner):** confirm the review draft rows, and fill in manual `walk_min` /
    `exits_gates` in `transfers.json`. Estimates cover the gaps until then.
-3. **M2 – router + UI:**
+3. **M2 – router + UI — DONE:**
    - `router.js` (both route types, estimate flags, fare-gate flag)
    - a minimal page with station pickers, day type and time
    - `router.test.mjs` with `known-routes.json`
@@ -303,5 +314,4 @@ Refreshing the feeds is manual: replace `data/raw/`, rebuild, commit `network.js
    - Ekspres all-stop after 23:00
    - Transit peak headway once the peak hours are known
    - merging the AG/SP shared trunk
-   - re-evaluating the headway band along the route
    - fetching feeds in CI

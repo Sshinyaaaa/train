@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KL Rail Planner</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>KL Rail Planner</h1>
+  <p class="sub">LRT · MRT · Monorail · BRT · KTM Komuter · ERL</p>
+</header>
+
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <form id="form" autocomplete="off">
+    <div class="pickers">
+      <div class="picker" data-role="from">
+        <label for="from">From</label>
+        <input id="from" type="text" placeholder="Station" role="combobox" aria-expanded="false" aria-controls="from-list" aria-autocomplete="list">
+        <ul id="from-list" class="suggest" role="listbox" hidden></ul>
+      </div>
+      <button type="button" id="swap" class="swap" aria-label="Swap origin and destination">⇅</button>
+      <div class="picker" data-role="to">
+        <label for="to">To</label>
+        <input id="to" type="text" placeholder="Station" role="combobox" aria-expanded="false" aria-controls="to-list" aria-autocomplete="list">
+        <ul id="to-list" class="suggest" role="listbox" hidden></ul>
+      </div>
+    </div>
+    <div class="when">
+      <label>Day
+        <select id="day">
+          <option value="weekday">Weekday</option>
+          <option value="saturday">Saturday</option>
+          <option value="sunday">Sunday</option>
+        </select>
+      </label>
+      <label>Depart
+        <input id="time" type="time" value="11:00" step="300">
+      </label>
+    </div>
+  </form>
+
+  <section id="results" aria-live="polite"></section>
+</main>
+
+<footer>
+  <p>Waits are estimated from average train frequency, not live timetables. Data: Prasarana rapid-rail-kl and KTMB GTFS static feeds; KLIA Ekspres / KLIA Transit from ERL's published figures.</p>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
