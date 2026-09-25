@@ -7,7 +7,13 @@
 // Costs are seconds. Waiting at the first boarding is the "initial wait": it counts toward
 // expected_min but not journey_min.
 
-export const DEFAULT_QUERY = { day: "weekday", time: "11:00" };
+// modes: enabled modes (null = all); maxWalkM: max first/last walk from a place (PLAN.md §4c).
+export const MODES = ["LRT", "MRT", "Monorail", "BRT", "KTM", "ERL"];
+export const MAX_WALK_OPTIONS = [500, 1000, 2000];
+export const DEFAULT_QUERY = { day: "weekday", time: "11:00", modes: null, maxWalkM: 1000 };
+
+const lineMode = (net, lid) => net.lines[lid].display?.mode;
+const enabledSet = (modes) => (modes && modes.length < MODES.length ? new Set(modes) : null);
 
 export function loadNetwork(net) {
   const boards = new Map();    // stop -> [{line, pi, i}]
@@ -79,7 +85,7 @@ class Heap {
 }
 
 // Access legs (PLAN.md §4b): place <-> station walking, straight line x 1.3 at 4.5 km/h.
-export const ACCESS = { maxDistM: 2000, nearest: 4, farFallback: 2, detour: 1.3, speedMPerMin: 75 };
+export const ACCESS = { nearest: 4, farFallback: 2, detour: 1.3, speedMPerMin: 75 };
 
 export function distanceM(a, b) {
   const R = 6371000, toRad = Math.PI / 180;
@@ -90,14 +96,17 @@ export function distanceM(a, b) {
 
 export const walkSec = (distM) => (distM * ACCESS.detour / ACCESS.speedMPerMin) * 60;
 
-// Candidate stations for a point: the 4 nearest within 2 km; if none, the nearest 2 marked far.
-// A station's distance is to its nearest line-stop; each line-stop keeps its own walk.
-export function accessCandidates(net, point) {
-  const all = Object.entries(net.stations).map(([id, st]) => {
+// Candidate stations for a point: the 4 nearest within maxDistM that an enabled mode serves; if
+// none, the nearest 2 such stations marked far. A station's distance is to its nearest line-stop;
+// each line-stop keeps its own walk.
+export function accessCandidates(net, point, { maxDistM = DEFAULT_QUERY.maxWalkM, modes = null } = {}) {
+  const enabled = enabledSet(modes);
+  const served = (st) => !enabled || st.stops.some((s) => net.stops[s].lines.some((l) => enabled.has(lineMode(net, l))));
+  const all = Object.entries(net.stations).filter(([, st]) => served(st)).map(([id, st]) => {
     const stops = st.stops.map((s) => ({ stop: s, dist_m: distanceM(point, net.stops[s]) }));
     return { station: id, dist_m: Math.min(...stops.map((x) => x.dist_m)), stops };
   }).sort((a, b) => a.dist_m - b.dist_m);
-  const near = all.filter((c) => c.dist_m <= ACCESS.maxDistM).slice(0, ACCESS.nearest);
+  const near = all.filter((c) => c.dist_m <= maxDistM).slice(0, ACCESS.nearest);
   const picked = near.length ? near : all.slice(0, ACCESS.farFallback);
   const far = near.length === 0;
   return picked.map((c) => ({ ...c, far, stops: c.stops.map((x) => ({ ...x, walk_sec: walkSec(x.dist_m) })) }));
@@ -108,11 +117,11 @@ function normEndpoint(e) {
 }
 
 // Endpoint -> [{stop, sec, far, station, dist_m, walk}] (sec = walk; 0 for a station endpoint).
-function endpointStops(net, e) {
+function endpointStops(net, e, opts) {
   if (e.type === "station") {
     return net.stations[e.id].stops.map((s) => ({ stop: s, sec: 0, far: false, station: e.id, dist_m: 0, walk: false }));
   }
-  return accessCandidates(net, e).flatMap((c) => c.stops.map((x) => (
+  return accessCandidates(net, e, opts).flatMap((c) => c.stops.map((x) => (
     { stop: x.stop, sec: x.walk_sec, far: c.far, station: c.station, dist_m: x.dist_m, walk: true })));
 }
 
@@ -127,8 +136,10 @@ function search(g, from, to, query, mode) {
   };
   const best = new Map();
   const heap = new Heap(less);
+  const enabled = enabledSet(query.modes);
+  const accessOpts = { maxDistM: query.maxWalkM, modes: query.modes };
   const targets = new Map();
-  for (const t of endpointStops(net, to)) {
+  for (const t of endpointStops(net, to, accessOpts)) {
     const cur = targets.get(t.stop);
     if (!cur || t.sec < cur.sec) targets.set(t.stop, t);
   }
@@ -136,7 +147,7 @@ function search(g, from, to, query, mode) {
   const stationOf = (stop) => net.stops[stop].station;
   const seen = (chain, st) => { for (let c = chain; c; c = c.prev) if (c.st === st) return true; return false; };
   // Virtual start: every candidate line-stop, seeded with its own access walk.
-  for (const o of endpointStops(net, from)) {
+  for (const o of endpointStops(net, from, accessOpts)) {
     const edge = o.walk ? { type: "access", place: from.name, stop: o.stop, dist_m: o.dist_m, sec: o.sec, far: o.far } : null;
     const l = { state: `s|${o.stop}`, cost: o.sec, farSec: o.far ? o.sec : 0, boardings: 0, initialWait: 0, initialHeadway: 0,
                 prev: null, edge, station: o.station, visited: { st: o.station, prev: null } };
@@ -174,6 +185,7 @@ function search(g, from, to, query, mode) {
         relax(l, "END", null, t.sec, edge, { farSec: l.farSec + (t.far ? t.sec : 0) });
       }
       for (const b of g.boards.get(stop) || []) {
+        if (enabled && !enabled.has(lineMode(net, b.line))) continue;   // mode filter
         const p = net.lines[b.line].patterns[b.pi];
         const hw = headwayAt(p, query.day, t0 + l.cost);
         if (hw == null) continue;
@@ -299,4 +311,17 @@ export function route(g, fromEp, toEp, query = DEFAULT_QUERY) {
     res.direct_walk_min = round1(walkSec(distanceM(pointOf(g.net, from), pointOf(g.net, to))));
   }
   return res;
+}
+
+// When filters block every route: which single extra mode would give one? Fastest first.
+export function suggestModes(g, fromEp, toEp, query = DEFAULT_QUERY) {
+  const q = { ...DEFAULT_QUERY, ...query };
+  const on = q.modes ?? MODES;
+  const out = [];
+  for (const m of MODES) {
+    if (on.includes(m)) continue;
+    const r = route(g, fromEp, toEp, { ...q, modes: [...on, m] });
+    if (r) out.push({ mode: m, journey_min: r.fastest.journey_min, expected_min: r.fastest.expected_min });
+  }
+  return out.sort((a, b) => a.expected_min - b.expected_min);
 }

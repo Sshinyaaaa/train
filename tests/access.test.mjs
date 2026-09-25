@@ -30,22 +30,22 @@ test("walk time = distance x 1.3 at 4.5 km/h", () => {
   assert.equal(walkSec(0), 0);
 });
 
-test("picks the 4 nearest stations within 2 km, nearest first", () => {
+test("picks the 4 nearest stations within the max walk (2 km setting), nearest first", () => {
   const net = makeNet({ A: 100, B: 300, C: 700, D: 1200, E: 1500, F: 1900 }, {});
-  const c = accessCandidates(net, place(0));
+  const c = accessCandidates(net, place(0), { maxDistM: 2000 });
   assert.deepEqual(c.map((x) => x.station), ["A", "B", "C", "D"]);
   assert.ok(c.every((x) => !x.far));
   assert.ok(Math.abs(c[0].dist_m - 100) < 1);
 });
 
-test("2 km cut-off: stations beyond 2 km are not candidates when one is within", () => {
+test("2 km setting: stations beyond 2 km are not candidates when one is within", () => {
   const net = makeNet({ NEAR: 1900, FAR1: 2100, FAR2: 2500 }, {});
-  const c = accessCandidates(net, place(0));
+  const c = accessCandidates(net, place(0), { maxDistM: 2000 });
   assert.deepEqual(c.map((x) => x.station), ["NEAR"]);
   assert.equal(c[0].far, false);
 });
 
-test("no station within 2 km: nearest 2 are used and marked far", () => {
+test("no station within the max walk: nearest 2 are used and marked far", () => {
   const net = makeNet({ S1: 5000, S2: 3000, S3: 9000 }, {});
   const c = accessCandidates(net, place(0));
   assert.deepEqual(c.map((x) => x.station), ["S2", "S1"]);

@@ -13,6 +13,7 @@ from gtfs_util import ROOT
 MAX_SEGMENT_SEC = 30 * 60
 STALE_DAYS = 14
 DAY_TYPES = ("weekday", "saturday", "sunday")
+MODES = ("LRT", "MRT", "Monorail", "BRT", "KTM", "ERL")
 KTMB_ALLOWED = {"ktmb:KC05_KB18", "ktmb:KA15_KD19"}
 HUB = "ktmb:19100"  # KL Sentral, reachability origin
 # Stations per line on the reference map (docs/interchange-review-draft.md §4). Coverage only.
@@ -54,6 +55,8 @@ def validate(net, today=None):
         d = line.get("display")
         if not d or not d.get("number") or not d.get("name"):
             errors.append(f"{lid}: missing display metadata (overrides/display.json)")
+        elif d.get("mode") not in MODES:
+            errors.append(f"{lid}: display mode {d.get('mode')!r} missing or not one of {', '.join(MODES)}")
         if not line.get("color"):
             errors.append(f"{lid}: no colour")
 

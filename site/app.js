@@ -1,4 +1,4 @@
-import { loadNetwork, route, DEFAULT_QUERY, distanceM, walkSec } from "./router.js";
+import { loadNetwork, route, suggestModes, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
 const PHOTON = "https://photon.komoot.io/api/";
@@ -15,6 +15,11 @@ let net, graph, stations = [];
 // Endpoint per role: {type: "station", id} | {type: "place", lat, lon, name, geo?: true}
 const picked = { from: null, to: null };
 let tab = "fastest";
+// Route filters (PLAN.md §4c): enabled modes + max first/last walk. Persisted per browser.
+const DEFAULT_FILTERS = { modes: [...MODES], maxWalkM: DEFAULT_QUERY.maxWalkM };
+let filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] };
+const filtersAreDefault = () => filters.modes.length === MODES.length && filters.maxWalkM === DEFAULT_FILTERS.maxWalkM;
+const modeList = (ms) => MODES.filter((m) => ms.includes(m)).join(", ");
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const color = (lid) => net.lines[lid].color || "#888";
@@ -241,7 +246,8 @@ const FLAG_TEXT = {
   estimated_walk: "estimated walk",
 };
 const estTags = (flags) => flags.filter((f) => FLAG_TEXT[f]).map((f) => `<span class="est">${FLAG_TEXT[f]}</span>`).join("");
-const farText = (dist, a, b) => `${fmtDist(dist)} from ${a} to ${b}. Consider e-hailing or a bus.`;
+const farAccess = (dist, station) => `${fmtDist(dist)} to ${station}, consider e-hailing`;
+const farEgress = (dist, station, place) => `${fmtDist(dist)} from ${station} to ${place}, consider e-hailing`;
 
 function journeyHtml(r) {
   const rows = [];
@@ -254,11 +260,11 @@ function journeyHtml(r) {
     if (leg.type === "access") {
       node(W, esc(leg.place), "Start");
       seg(W, true, leg.far
-        ? `<span class="far">${esc(farText(leg.dist_m, leg.place, stopName(leg.stop)))}</span>`
+        ? `<span class="far">${esc(farAccess(leg.dist_m, stopName(leg.stop)))}</span>`
         : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(stopName(leg.stop))}`);
     } else if (leg.type === "egress") {
       seg(W, true, leg.far
-        ? `<span class="far">${esc(farText(leg.dist_m, stopName(leg.stop), leg.place))}</span>`
+        ? `<span class="far">${esc(farEgress(leg.dist_m, stopName(leg.stop), leg.place))}</span>`
         : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(leg.place)}`);
       node(W, esc(leg.place), "Arrive");
     } else if (leg.type === "ride") {
@@ -295,7 +301,7 @@ function routeCard(r, res) {
       <div class="big">~${fmtMin(r.journey_min)} <span class="meta">+ up to ${fmtMin(r.initial_headway_min)} wait</span></div>
       <div class="meta">${badges(lines)} ${changes}${r.transfer_wait_min > 0 ? ` · includes ~${fmtMin(r.transfer_wait_min)} waiting at changes` : ""}</div>
       <div class="meta">Expected ~${fmtMin(r.expected_min)} with an average first wait</div>
-      ${r.excludes_far_access ? `<div class="meta">Times exclude getting to or from a station more than 2 km away.</div>` : ""}
+      ${r.excludes_far_access ? `<div class="meta">Times exclude getting to or from a station beyond your ${fmtDist(filters.maxWalkM)} max walk.</div>` : ""}
     </div>
     ${walkAlt}
     ${journeyHtml(r)}
@@ -312,14 +318,25 @@ function render() {
   if (from.type === "station" && to.type === "station" && from.id === to.id) {
     out.innerHTML = `<p class="msg">Origin and destination are the same station.</p>`; return;
   }
-  const q = { day: $("day").value, time: $("time").value || DEFAULT_QUERY.time };
+  if (!filters.modes.length) { out.innerHTML = `<p class="msg">Select at least one mode.</p>`; return; }
+  const q = { day: $("day").value, time: $("time").value || DEFAULT_QUERY.time, modes: filters.modes, maxWalkM: filters.maxWalkM };
   let res;
   try { res = route(graph, from, to, q); } catch (e) { out.innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
+  const note = filtersAreDefault() ? "" : `<p class="filters-note">Filters active: ${esc(modeList(filters.modes))} · max walk ${fmtDist(filters.maxWalkM)} · <button type="button" class="linkbtn" data-reset>Reset filters</button></p>`;
   if (!res) {
     const d = distanceM(pointOf(from), pointOf(to));
     const walk = from.type === "place" || to.type === "place"
       ? ` Walking directly is about ${fmtMin(walkSec(d) / 60)} (${fmtDist(d)}).` : "";
-    out.innerHTML = `<p class="msg">No train route found at this time. Lines may not be running.${walk}</p>`;
+    let html = `<p class="msg">No train route found at this time. Lines may not be running.${walk}</p>`;
+    if (filters.modes.length < MODES.length) {
+      const sug = suggestModes(graph, from, to, q);
+      const only = filters.modes.length === 1 ? `${filters.modes[0]} only` : modeList(filters.modes);
+      html = sug.length
+        ? `<p class="msg">No route with ${esc(only)}. Enabling <button type="button" class="linkbtn" data-enable="${sug[0].mode}">${sug[0].mode}</button> gives ~${fmtMin(sug[0].journey_min)}.${sug.length > 1 ? ` Also works: ${sug.slice(1).map((x) => `<button type="button" class="linkbtn" data-enable="${x.mode}">${x.mode}</button> (~${fmtMin(x.journey_min)})`).join(", ")}.` : ""}</p>`
+        : `<p class="msg">No route with ${esc(only)}, and enabling any single other mode doesn't help.${walk}</p>`;
+    }
+    out.innerHTML = note + html;
+    wireResultButtons(out);
     return;
   }
   const r = tab === "fewest" && res.fewest ? res.fewest : res.fastest;
@@ -327,8 +344,50 @@ function render() {
       <button type="button" role="tab" data-tab="fastest" aria-selected="${r === res.fastest}">Fastest · ${fmtMin(res.fastest.expected_min)}</button>
       <button type="button" role="tab" data-tab="fewest" aria-selected="${r === res.fewest}">Fewest changes · ${res.fewest.transfers}</button>
     </div>` : "";
-  out.innerHTML = tabs + routeCard(r, res);
+  out.innerHTML = note + tabs + routeCard(r, res);
   out.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
+  wireResultButtons(out);
+}
+
+function wireResultButtons(out) {
+  out.querySelectorAll("[data-reset]").forEach((b) => b.addEventListener("click", resetFilters));
+  out.querySelectorAll("[data-enable]").forEach((b) => b.addEventListener("click", () => {
+    if (!filters.modes.includes(b.dataset.enable)) filters.modes.push(b.dataset.enable);
+    applyFilters();
+  }));
+}
+
+// --- Filters ------------------------------------------------------------------------------------
+function loadFilters() {
+  try {
+    const s = JSON.parse(localStorage.getItem("klrail.filters") || "null");
+    if (s && Array.isArray(s.modes) && MAX_WALK_OPTIONS.includes(s.maxWalkM)) {
+      filters = { modes: MODES.filter((m) => s.modes.includes(m)), maxWalkM: s.maxWalkM };
+    }
+  } catch {}
+}
+function saveFilters() {
+  try { localStorage.setItem("klrail.filters", JSON.stringify(filters)); } catch {}
+}
+function drawFilters() {
+  $("modes").innerHTML = MODES.map((m) => `<button type="button" class="chip" data-mode="${m}" aria-pressed="${filters.modes.includes(m)}">${m}</button>`).join("");
+  $("maxwalk").value = String(filters.maxWalkM);
+  $("reset-filters").hidden = filtersAreDefault();
+}
+function applyFilters() { saveFilters(); drawFilters(); render(); }
+function resetFilters() { filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] }; applyFilters(); }
+function setupFilters() {
+  loadFilters();
+  $("modes").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-mode]");
+    if (!b) return;
+    const m = b.dataset.mode;
+    filters.modes = filters.modes.includes(m) ? filters.modes.filter((x) => x !== m) : MODES.filter((x) => x === m || filters.modes.includes(x));
+    applyFilters();
+  });
+  $("maxwalk").addEventListener("change", () => { filters.maxWalkM = Number($("maxwalk").value); applyFilters(); });
+  $("reset-filters").addEventListener("click", resetFilters);
+  drawFilters();
 }
 
 // Stations and typed places are remembered; the current location never is.
@@ -367,6 +426,7 @@ async function main() {
     const f = picked.from, t = picked.to;
     setPicked("from", t); setPicked("to", f); save(); render();
   });
+  setupFilters();
   $("day").addEventListener("change", render);
   $("time").addEventListener("change", render);
   showBanner();

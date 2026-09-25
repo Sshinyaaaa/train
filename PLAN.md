@@ -265,8 +265,9 @@ A place is `{type: "place", lat, lon, name}`.
 - **Distance to a station:** the minimum straight-line distance to any of its line-stops.
 - **Walk time:** `distance × 1.3 / 75 m/min` (1.3 detour at 4.5 km/h), without the fixed transfer
   overhead.
-- **Candidates:** the 4 nearest stations within 2 km. If none is within 2 km, the nearest 2 are
-  used and marked `far`.
+- **Candidates:** the 4 nearest stations within the **max walk** setting (default 1 km; see §4c)
+  that are served by an enabled mode. If none is in range, the nearest 2 enabled stations are used
+  and marked `far`.
 - **Virtual start and end:**
   - Every line-stop of each origin candidate is seeded with its own access walk.
   - At a destination candidate's line-stop, an egress edge leads to a virtual `END` state.
@@ -288,6 +289,49 @@ A place is `{type: "place", lat, lon, name}`.
   stations and places.
 - **Geocoder down or errored:** show "Place search unavailable", and station search keeps working.
 - **Nothing matches:** show "No matching stations or places".
+
+## 4c. Route filters (M4.1)
+
+**Modes.**
+- Each line in `overrides/display.json` has a `mode`: one of `LRT`, `MRT`, `Monorail`, `BRT`,
+  `KTM`, `ERL`. The build copies it to `lines[*].display.mode`.
+- Validation errors if any line has no mode, or an unknown one.
+- The query takes `modes`, the list of enabled modes. The default is all six.
+- The router **boards only lines of enabled modes**.
+- Walking transfers between line-stops still work as normal. So does starting or ending at a
+  station the user picked, even if only disabled lines serve it: the route can walk to a connected
+  station.
+- Access candidates for a place or the current location only include stations with at least one
+  line of an enabled mode.
+
+| mode | lines |
+|---|---|
+| LRT | 3 Ampang, 4 Sri Petaling, 5 Kelana Jaya, 11 Shah Alam |
+| MRT | 9 Kajang, 12 Putrajaya |
+| Monorail | 8 KL Monorail |
+| BRT | B1 BRT Sunway |
+| KTM | 1 Batu Caves–Pulau Sebang, 2 Tanjung Malim–Pelabuhan Klang |
+| ERL | 6 KLIA Ekspres, 7 KLIA Transit |
+
+**Max walk.**
+- The query takes `maxWalkM`: 500, 1000 (default) or 2000. It applies only to the first and last
+  walks from a place.
+- A stretch beyond it is shown as "X km to [station], consider e-hailing". It's excluded from
+  times, as in §4b.
+- Transfers between stations aren't affected.
+
+**No route because of filters.**
+- If filters block every route, `suggestModes()` retries with each single disabled mode added.
+- It returns the modes that give a route, fastest first by `expected_min`.
+- The UI shows, e.g., "No route with MRT only. Enabling LRT gives ~40 min", where the mode name is
+  a button that enables it.
+- If even all modes give no route, the normal no-route message is shown.
+
+**UI and persistence.**
+- Mode chips (multi-select toggle buttons) and a max-walk select sit under day/time.
+- Filters and max walk are saved in `localStorage` under `klrail.filters`, inside try/catch. If
+  storage is unavailable or the data is invalid, the defaults apply.
+- When the filters aren't the defaults, results show "Filters active · Reset filters".
 
 ## 5. Validation checks (`scripts/validate.py`, run by the build)
 
@@ -355,9 +399,14 @@ and the site shows a banner.
   - No station twice: a synthetic network whose only path revisits a station returns no route.
     Real station pairs are also swept to check no returned route revisits one.
 - `node tests/known-routes-report.mjs` prints a markdown table of every case.
+- `tests/filters.test.mjs` tests, on synthetic networks:
+  - disabled lines are never boarded
+  - access candidates respect the enabled modes
+  - `suggestModes()` returns only the modes that help, fastest first
+  - the max-walk cut-off (500 m / 1 km / 2 km) and the far fallback
 - `tests/access.test.mjs` tests the access-leg logic on synthetic coordinates:
-  - picking the 4 nearest stations within 2 km
-  - the 2 km cut-off
+  - picking the 4 nearest stations within the max walk
+  - the max-walk cut-off
   - falling back to the nearest 2 marked `far`
   - the walk-time formula
   - the virtual start/end choosing the best combination
@@ -402,7 +451,9 @@ fallback. To update it, rebuild locally and commit.
    - a minimal page with station pickers, day type and time
    - `router.test.mjs` with `known-routes.json`
 4. **M3 – deploy — DONE:** the Pages Action described in section 7.
-5. **M4 – places:** search from and to a place or the current location, with access legs (§4b).
+5. **M4 – places — DONE:** search from and to a place or the current location, with access legs
+   (§4b).
+   - **M4.1 – filters:** mode chips, max walk, no-route mode suggestions (§4c).
 6. **M5 – timetable-aware KTM:** real departures (next train after arrival) instead of headway / 2,
    respecting `calendar_dates`.
 7. **Later / optional:**

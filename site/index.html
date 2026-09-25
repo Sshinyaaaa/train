@@ -43,6 +43,18 @@
         <input id="time" type="time" value="11:00" step="300">
       </label>
     </div>
+    <div class="filters">
+      <div class="chips" id="modes" role="group" aria-label="Modes"></div>
+      <div class="filter-row">
+        <label for="maxwalk">Max walk to/from a place</label>
+        <select id="maxwalk">
+          <option value="500">500 m</option>
+          <option value="1000">1 km</option>
+          <option value="2000">2 km</option>
+        </select>
+        <button type="button" id="reset-filters" class="linkbtn" hidden>Reset filters</button>
+      </div>
+    </div>
   </form>
 
   <section id="results" aria-live="polite"></section>

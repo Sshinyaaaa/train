@@ -295,7 +295,8 @@ def build(today):
     for lid, line in lines.items():
         d = display.get(lid)
         if d:
-            line["display"] = {"number": d["number"], "name": d["name"], "label": f"{d['number']} · {d['name']}"}
+            line["display"] = {"number": d["number"], "name": d["name"], "label": f"{d['number']} · {d['name']}",
+                               "mode": d.get("mode")}
             if not line.get("color") and d.get("color"):
                 line["color"], line["color_source"] = d["color"], "display_approx"
     transfers = load_transfers(stops)
