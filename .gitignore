@@ -1,0 +1,9 @@
+# GTFS feeds (zips + extracted); not redistributed
+data/raw/
+
+# Reference map is RapidKL material; do not commit
+docs/reference/
+
+__pycache__/
+*.pyc
+stuff/

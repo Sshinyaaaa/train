@@ -1,0 +1,562 @@
+[
+ {
+  "from": "rapid:AG11",
+  "to": "rapid:SP11",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #1"
+ },
+ {
+  "from": "rapid:AG10",
+  "to": "rapid:SP10",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #2"
+ },
+ {
+  "from": "rapid:AG9",
+  "to": "rapid:SP9",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #3"
+ },
+ {
+  "from": "rapid:AG8",
+  "to": "rapid:SP8",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #4"
+ },
+ {
+  "from": "rapid:AG7",
+  "to": "rapid:SP7",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #5"
+ },
+ {
+  "from": "rapid:AG6",
+  "to": "rapid:SP6",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #6"
+ },
+ {
+  "from": "rapid:AG5",
+  "to": "rapid:SP5",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #7"
+ },
+ {
+  "from": "rapid:AG4",
+  "to": "rapid:SP4",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #8"
+ },
+ {
+  "from": "rapid:AG3",
+  "to": "rapid:SP3",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #9"
+ },
+ {
+  "from": "rapid:AG2",
+  "to": "rapid:SP2",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #10"
+ },
+ {
+  "from": "rapid:AG1",
+  "to": "rapid:SP1",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #11"
+ },
+ {
+  "from": "rapid:KJ17",
+  "to": "ktmb:52700",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #12"
+ },
+ {
+  "from": "rapid:SP15",
+  "to": "ktmb:19600",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #13"
+ },
+ {
+  "from": "rapid:KG04",
+  "to": "rapid:PY01",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #14"
+ },
+ {
+  "from": "rapid:KJ37",
+  "to": "rapid:SP31",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #15"
+ },
+ {
+  "from": "rapid:KJ15",
+  "to": "ktmb:19100",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #16"
+ },
+ {
+  "from": "rapid:KJ14",
+  "to": "rapid:KG16",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #17"
+ },
+ {
+  "from": "rapid:SP16",
+  "to": "rapid:PY29",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #18"
+ },
+ {
+  "from": "rapid:KJ31",
+  "to": "rapid:BRT7",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #19"
+ },
+ {
+  "from": "rapid:AG9",
+  "to": "rapid:MR4",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #20"
+ },
+ {
+  "from": "rapid:SP9",
+  "to": "rapid:MR4",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #21"
+ },
+ {
+  "from": "rapid:KG20",
+  "to": "rapid:PY23",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #22"
+ },
+ {
+  "from": "rapid:KG35",
+  "to": "ktmb:20400",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #23"
+ },
+ {
+  "from": "rapid:AG13",
+  "to": "rapid:KG22",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #24"
+ },
+ {
+  "from": "rapid:AG7",
+  "to": "rapid:KJ13",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #25"
+ },
+ {
+  "from": "rapid:KJ13",
+  "to": "rapid:SP7",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #26"
+ },
+ {
+  "from": "rapid:PY13",
+  "to": "ktmb:50400",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #27"
+ },
+ {
+  "from": "rapid:AG3",
+  "to": "rapid:MR11",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #28"
+ },
+ {
+  "from": "rapid:SP3",
+  "to": "rapid:MR11",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #29"
+ },
+ {
+  "from": "rapid:AG3",
+  "to": "rapid:PY17",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #30"
+ },
+ {
+  "from": "rapid:SP3",
+  "to": "rapid:PY17",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #31"
+ },
+ {
+  "from": "rapid:KG18A",
+  "to": "rapid:MR6",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #32"
+ },
+ {
+  "from": "rapid:KJ28",
+  "to": "ktmb:53700",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #33"
+ },
+ {
+  "from": "rapid:PY08",
+  "to": "ktmb:18400",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #34"
+ },
+ {
+  "from": "rapid:PY17",
+  "to": "rapid:MR11",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #35"
+ },
+ {
+  "from": "rapid:AG11",
+  "to": "rapid:PY24",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #36"
+ },
+ {
+  "from": "rapid:SP11",
+  "to": "rapid:PY24",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #37"
+ },
+ {
+  "from": "rapid:BRT1",
+  "to": "ktmb:53600",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #38"
+ },
+ {
+  "from": "rapid:AG6",
+  "to": "ktmb:18900",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #40"
+ },
+ {
+  "from": "rapid:SP6",
+  "to": "ktmb:18900",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #41"
+ },
+ {
+  "from": "rapid:PY04",
+  "to": "ktmb:18500",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #42"
+ },
+ {
+  "from": "rapid:KG09",
+  "to": "rapid:SA1",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #43"
+ },
+ {
+  "from": "rapid:AG8",
+  "to": "rapid:KG17",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #44"
+ },
+ {
+  "from": "rapid:SP8",
+  "to": "rapid:KG17",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #45"
+ },
+ {
+  "from": "rapid:KJ27",
+  "to": "rapid:SA7",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #46"
+ },
+ {
+  "from": "rapid:MR1",
+  "to": "ktmb:19100",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #47"
+ },
+ {
+  "from": "rapid:KJ15",
+  "to": "rapid:MR1",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #48"
+ },
+ {
+  "from": "rapid:KJ9",
+  "to": "rapid:PY20",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #49"
+ },
+ {
+  "from": "rapid:AG4",
+  "to": "ktmb:18800",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #50"
+ },
+ {
+  "from": "rapid:SP4",
+  "to": "ktmb:18800",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #51"
+ },
+ {
+  "from": "rapid:KJ12",
+  "to": "rapid:MR8",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #53"
+ },
+ {
+  "from": "rapid:KJ15",
+  "to": "rapid:KG15",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #54"
+ },
+ {
+  "from": "rapid:KG15",
+  "to": "ktmb:19100",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #56"
+ },
+ {
+  "from": "rapid:KJ14",
+  "to": "ktmb:19000",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "draft #57"
+ },
+ {
+  "from": "rapid:AG5",
+  "to": "rapid:MR9",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map grey link Sultan Ismail - Medan Tuanku (>400 m)"
+ },
+ {
+  "from": "rapid:SP5",
+  "to": "rapid:MR9",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map grey link Sultan Ismail - Medan Tuanku (>400 m)"
+ },
+ {
+  "from": "ktmb:19100",
+  "to": "erl-klia-ekspres:kl_sentral",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map KL Sentral hub"
+ },
+ {
+  "from": "ktmb:19100",
+  "to": "erl-klia-transit:kl_sentral",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map KL Sentral hub"
+ },
+ {
+  "from": "rapid:KJ15",
+  "to": "erl-klia-ekspres:kl_sentral",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map KL Sentral hub"
+ },
+ {
+  "from": "rapid:KJ15",
+  "to": "erl-klia-transit:kl_sentral",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map KL Sentral hub"
+ },
+ {
+  "from": "erl-klia-ekspres:kl_sentral",
+  "to": "erl-klia-transit:kl_sentral",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map KL Sentral hub"
+ },
+ {
+  "from": "rapid:MR1",
+  "to": "erl-klia-ekspres:kl_sentral",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map grey link Monorail - KL Sentral hub"
+ },
+ {
+  "from": "rapid:MR1",
+  "to": "erl-klia-transit:kl_sentral",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map grey link Monorail - KL Sentral hub"
+ },
+ {
+  "from": "rapid:KG15",
+  "to": "erl-klia-ekspres:kl_sentral",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map grey link Muzium Negara - KL Sentral hub"
+ },
+ {
+  "from": "rapid:KG15",
+  "to": "erl-klia-transit:kl_sentral",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map grey link Muzium Negara - KL Sentral hub"
+ },
+ {
+  "from": "ktmb:19600",
+  "to": "erl-klia-transit:bandar_tasik_selatan",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map BTS: KTM + KLIA Transit joined"
+ },
+ {
+  "from": "rapid:SP15",
+  "to": "erl-klia-transit:bandar_tasik_selatan",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map BTS grey link"
+ },
+ {
+  "from": "rapid:PY41",
+  "to": "erl-klia-transit:putrajaya_sentral",
+  "kind": "connecting",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map Putrajaya Sentral grey link"
+ },
+ {
+  "from": "erl-klia-ekspres:klia_t1",
+  "to": "erl-klia-transit:klia_t1",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map KLIA T1"
+ },
+ {
+  "from": "erl-klia-ekspres:klia_t2",
+  "to": "erl-klia-transit:klia_t2",
+  "kind": "interchange",
+  "walk_min": null,
+  "exits_gates": null,
+  "note": "map KLIA T2"
+ }
+]

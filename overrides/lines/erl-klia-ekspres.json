@@ -1,0 +1,29 @@
+{
+  "id": "erl-klia-ekspres",
+  "name": "KLIA Ekspres",
+  "short": "KLIA Ekspres",
+  "color": null,
+  "sources": [
+    "https://www.kliaekspres.com/products-fares/klia-ekspres/ (retrieved 2026-09-26): every 20 min all day; KL Sentral-KLIA T1 28 min; KLIA T1-KLIA T2 3 min; first/last trains KL Sentral 05:00/00:00, KLIA T2 04:55/00:00",
+    "Station list: docs/reference/transit-map-2026-06.pdf (line 6)",
+    "Coordinates: KL Sentral from KTMB stop 19100; KLIA T1/T2 from Wikipedia (see stops)"
+  ],
+  "not_modelled": "From 23:00 all KLIA Ekspres trains stop at all stations (same source).",
+  "stops": [
+    {"id": "kl_sentral", "name": "KL Sentral", "coord_from": "ktmb:19100"},
+    {"id": "klia_t1", "name": "KLIA T1", "lat": 2.7550, "lon": 101.7049,
+     "coord_source": "https://en.wikipedia.org/wiki/KLIA_T1_ERL_station (retrieved 2026-09-26)"},
+    {"id": "klia_t2", "name": "KLIA T2", "lat": 2.74, "lon": 101.69,
+     "coord_source": "https://en.wikipedia.org/wiki/KLIA_T2_station (retrieved 2026-09-26; page gives 2 decimals only, ~1 km precision)"}
+  ],
+  "patterns": [
+    {"dir": 0, "stops": ["kl_sentral", "klia_t1", "klia_t2"], "run_sec": [0, 1680, 1860],
+     "run_source": "official",
+     "headways": {"weekday": [[18000, 86400, 1200]], "saturday": [[18000, 86400, 1200]], "sunday": [[18000, 86400, 1200]]},
+     "headway_source": "official"},
+    {"dir": 1, "stops": ["klia_t2", "klia_t1", "kl_sentral"], "run_sec": [0, 180, 1860],
+     "run_source": "official",
+     "headways": {"weekday": [[17700, 86400, 1200]], "saturday": [[17700, 86400, 1200]], "sunday": [[17700, 86400, 1200]]},
+     "headway_source": "official"}
+  ]
+}
