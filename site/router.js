@@ -78,8 +78,46 @@ class Heap {
   }
 }
 
+// Access legs (PLAN.md §4b): place <-> station walking, straight line x 1.3 at 4.5 km/h.
+export const ACCESS = { maxDistM: 2000, nearest: 4, farFallback: 2, detour: 1.3, speedMPerMin: 75 };
+
+export function distanceM(a, b) {
+  const R = 6371000, toRad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toRad, dLon = (b.lon - a.lon) * toRad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+export const walkSec = (distM) => (distM * ACCESS.detour / ACCESS.speedMPerMin) * 60;
+
+// Candidate stations for a point: the 4 nearest within 2 km; if none, the nearest 2 marked far.
+// A station's distance is to its nearest line-stop; each line-stop keeps its own walk.
+export function accessCandidates(net, point) {
+  const all = Object.entries(net.stations).map(([id, st]) => {
+    const stops = st.stops.map((s) => ({ stop: s, dist_m: distanceM(point, net.stops[s]) }));
+    return { station: id, dist_m: Math.min(...stops.map((x) => x.dist_m)), stops };
+  }).sort((a, b) => a.dist_m - b.dist_m);
+  const near = all.filter((c) => c.dist_m <= ACCESS.maxDistM).slice(0, ACCESS.nearest);
+  const picked = near.length ? near : all.slice(0, ACCESS.farFallback);
+  const far = near.length === 0;
+  return picked.map((c) => ({ ...c, far, stops: c.stops.map((x) => ({ ...x, walk_sec: walkSec(x.dist_m) })) }));
+}
+
+function normEndpoint(e) {
+  return typeof e === "string" ? { type: "station", id: e } : e;
+}
+
+// Endpoint -> [{stop, sec, far, station, dist_m, walk}] (sec = walk; 0 for a station endpoint).
+function endpointStops(net, e) {
+  if (e.type === "station") {
+    return net.stations[e.id].stops.map((s) => ({ stop: s, sec: 0, far: false, station: e.id, dist_m: 0, walk: false }));
+  }
+  return accessCandidates(net, e).flatMap((c) => c.stops.map((x) => (
+    { stop: x.stop, sec: x.walk_sec, far: c.far, station: c.station, dist_m: x.dist_m, walk: true })));
+}
+
 // mode "fastest": minimise (expected, boardings); "fewest": minimise (boardings, expected).
-function search(g, fromStation, toStation, query, mode) {
+function search(g, from, to, query, mode) {
   const { net } = g;
   const t0 = parseTime(query.time);
   const key = mode === "fastest" ? (l) => [l.cost, l.boardings] : (l) => [l.boardings, l.cost];
@@ -89,25 +127,35 @@ function search(g, fromStation, toStation, query, mode) {
   };
   const best = new Map();
   const heap = new Heap(less);
-  const targets = new Set(net.stations[toStation].stops);
+  const targets = new Map();
+  for (const t of endpointStops(net, to)) {
+    const cur = targets.get(t.stop);
+    if (!cur || t.sec < cur.sec) targets.set(t.stop, t);
+  }
+  const needRide = from.type === "place" && to.type === "place";
   const stationOf = (stop) => net.stops[stop].station;
   const seen = (chain, st) => { for (let c = chain; c; c = c.prev) if (c.st === st) return true; return false; };
-  for (const s of net.stations[fromStation].stops) {
-    const l = { state: `s|${s}`, cost: 0, boardings: 0, initialWait: 0, initialHeadway: 0, prev: null, edge: null,
-                station: fromStation, visited: { st: fromStation, prev: null } };
-    best.set(l.state, l); heap.push(l);
+  // Virtual start: every candidate line-stop, seeded with its own access walk.
+  for (const o of endpointStops(net, from)) {
+    const edge = o.walk ? { type: "access", place: from.name, stop: o.stop, dist_m: o.dist_m, sec: o.sec, far: o.far } : null;
+    const l = { state: `s|${o.stop}`, cost: o.sec, farSec: o.far ? o.sec : 0, boardings: 0, initialWait: 0, initialHeadway: 0,
+                prev: null, edge, station: o.station, visited: { st: o.station, prev: null } };
+    const cur = best.get(l.state);
+    if (!cur || less(l, cur)) { best.set(l.state, l); heap.push(l); }
   }
   // A route may not return to a station it has already left (stations passed through on a train
   // count). The check is on each label's own path; with one best label per state this is a
   // heuristic rather than an exact constrained shortest path, which is fine at this network size.
   const relax = (from, state, stop, dcost, edge, extra = {}) => {
-    const st = stationOf(stop);
-    let visited = from.visited;
-    if (st !== from.station) {
-      if (seen(visited, st)) return;
-      visited = { st, prev: visited };
+    let st = from.station, visited = from.visited;
+    if (stop != null) {
+      st = stationOf(stop);
+      if (st !== from.station) {
+        if (seen(visited, st)) return;
+        visited = { st, prev: visited };
+      }
     }
-    const l = { state, cost: from.cost + dcost, boardings: from.boardings, initialWait: from.initialWait,
+    const l = { state, cost: from.cost + dcost, farSec: from.farSec, boardings: from.boardings, initialWait: from.initialWait,
                 initialHeadway: from.initialHeadway, prev: from, edge, station: st, visited, ...extra };
     const cur = best.get(state);
     if (!cur || less(l, cur)) { best.set(state, l); heap.push(l); }
@@ -115,10 +163,16 @@ function search(g, fromStation, toStation, query, mode) {
   while (heap.size) {
     const l = heap.pop();
     if (best.get(l.state) !== l) continue;
+    if (l.state === "END") return l;
     const parts = l.state.split("|");
     if (parts[0] === "s") {
       const stop = parts[1];
-      if (targets.has(stop)) return l;
+      const t = targets.get(stop);
+      if (t && (!needRide || l.boardings > 0)) {
+        // Virtual end: egress walk (0 for a station destination).
+        const edge = { type: "egress", place: to.name, stop, dist_m: t.dist_m, sec: t.sec, far: t.far, walk: t.walk };
+        relax(l, "END", null, t.sec, edge, { farSec: l.farSec + (t.far ? t.sec : 0) });
+      }
       for (const b of g.boards.get(stop) || []) {
         const p = net.lines[b.line].patterns[b.pi];
         const hw = headwayAt(p, query.day, t0 + l.cost);
@@ -127,8 +181,8 @@ function search(g, fromStation, toStation, query, mode) {
         relax(l, `p|${b.line}|${b.pi}|${b.i}`, stop, wait, { type: "board", line: b.line, pi: b.pi, i: b.i, wait, headway: hw },
               { boardings: l.boardings + 1, initialWait: first ? wait : l.initialWait, initialHeadway: first ? hw : l.initialHeadway });
       }
-      for (const { to, t } of g.transfers.get(stop) || []) {
-        relax(l, `s|${to}`, to, transferCost(g, t), { type: "transfer", from: stop, to, t });
+      for (const { to: next, t: tr } of g.transfers.get(stop) || []) {
+        relax(l, `s|${next}`, next, transferCost(g, tr), { type: "transfer", from: stop, to: next, t: tr });
       }
     } else {
       const [, line, piS, iS] = parts;
@@ -174,6 +228,10 @@ function buildRoute(g, label) {
       if (!ride.flags.includes("estimated_run") && est.some((i) => i >= ride._i0 && i < ride._i1)) ride.flags.push("estimated_run");
       delete ride._start; delete ride._pi; delete ride._i0; delete ride._i1;
       legs.push(ride); ride = null;
+    } else if (e.type === "access" || e.type === "egress") {
+      if (e.type === "egress" && !e.walk) continue;   // station destination: nothing to show
+      legs.push({ type: e.type, place: e.place, stop: e.stop, dist_m: Math.round(e.dist_m),
+                  walk_min: e.far ? null : round1(e.sec), far: e.far, flags: e.far ? ["far_access"] : [] });
     } else if (e.type === "transfer") {
       const t = e.t, flags = [];
       if (t.walk_source === "estimated") flags.push("estimated_walk");
@@ -196,8 +254,10 @@ function buildRoute(g, label) {
   });
   const flags = [...new Set(withChanges.flatMap(x => x.flags))];
   return {
-    expected_min: round1(label.cost),
-    journey_min: round1(label.cost - label.initialWait),
+    // far access/egress legs (no station within 2 km) are shown as distances, not counted in times
+    expected_min: round1(label.cost - label.farSec),
+    journey_min: round1(label.cost - label.farSec - label.initialWait),
+    excludes_far_access: label.farSec > 0,
     initial_wait_min: round1(label.initialWait),
     initial_headway_min: round1(label.initialHeadway),   // worst-case first wait ("up to")
     transfer_wait_min: Math.round(rides.slice(1).reduce((a, r) => a + r.wait_min, 0) * 10) / 10,
@@ -216,15 +276,27 @@ function stationsVisited(label) {
   return out.reverse();
 }
 
-// Returns { fastest, fewest, same } or null if no route. fewest is null when identical to fastest.
-export function route(g, fromStation, toStation, query = DEFAULT_QUERY) {
+const pointOf = (net, e) => (e.type === "station" ? net.stations[e.id] : e);
+
+// from / to: a station id string, {type: "station", id}, or {type: "place", lat, lon, name}.
+// Returns { fastest, fewest, query, direct_walk_min } or null if no route.
+// fewest is null when identical to fastest.
+export function route(g, fromEp, toEp, query = DEFAULT_QUERY) {
   const q = { ...DEFAULT_QUERY, ...query };
-  if (!g.net.stations[fromStation] || !g.net.stations[toStation]) throw new Error("unknown station");
-  if (fromStation === toStation) return null;
-  const f = search(g, fromStation, toStation, q, "fastest");
+  const from = normEndpoint(fromEp), to = normEndpoint(toEp);
+  for (const e of [from, to]) {
+    if (e.type === "station" && !g.net.stations[e.id]) throw new Error("unknown station");
+    if (e.type === "place" && !(Number.isFinite(e.lat) && Number.isFinite(e.lon))) throw new Error("bad place");
+  }
+  if (from.type === "station" && to.type === "station" && from.id === to.id) return null;
+  const f = search(g, from, to, q, "fastest");
   if (!f) return null;
   const fastest = buildRoute(g, f);
-  const fewest = buildRoute(g, search(g, fromStation, toStation, q, "fewest"));
+  const fewest = buildRoute(g, search(g, from, to, q, "fewest"));
   const same = JSON.stringify(fastest.legs) === JSON.stringify(fewest.legs);
-  return { fastest, fewest: same ? null : fewest, query: q };
+  const res = { fastest, fewest: same ? null : fewest, query: q, direct_walk_min: null };
+  if (from.type === "place" || to.type === "place") {
+    res.direct_walk_min = round1(walkSec(distanceM(pointOf(g.net, from), pointOf(g.net, to))));
+  }
+  return res;
 }

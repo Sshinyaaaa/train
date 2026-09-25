@@ -240,6 +240,55 @@ timetable; waiting is estimated.
   - AG/SP share track from Sentul Timur to Chan Sow Lin but aren't merged, so the wait there is
     overestimated.
 
+## 4b. Places and access legs (M4)
+
+**Endpoints.** Origin and destination can each be:
+- a **station** (`{type: "station", id}`), as before
+- **"Current location"**, from the browser Geolocation API. It's requested only when the user taps
+  that option.
+- a **typed place**, geocoded with Photon
+
+A place is `{type: "place", lat, lon, name}`.
+
+**Geocoding: Photon** (`https://photon.komoot.io/api`, OSM data, no API key).
+- **Request:** `q=<typed text>&limit=5&lang=en&bbox=101.2,2.6,102.0,3.4`, the Klang Valley box
+  from the audit, as minLon,minLat,maxLon,maxLat.
+- **Rate:** debounced 350 ms, with at least 3 characters. This keeps usage within Photon's
+  fair-use policy.
+- **Privacy:** only the typed text is sent, plus the fixed bbox. No location bias parameters.
+  **Current location never leaves the browser.** It's only used by the in-page router, and it isn't
+  stored in `localStorage`.
+- **Attribution:** "Search by Photon · © OpenStreetMap contributors", linked, shown in the place
+  results and in the footer.
+
+**Access legs.** These are computed in `router.js`, with no network I/O:
+- **Distance to a station:** the minimum straight-line distance to any of its line-stops.
+- **Walk time:** `distance × 1.3 / 75 m/min` (1.3 detour at 4.5 km/h), without the fixed transfer
+  overhead.
+- **Candidates:** the 4 nearest stations within 2 km. If none is within 2 km, the nearest 2 are
+  used and marked `far`.
+- **Virtual start and end:**
+  - Every line-stop of each origin candidate is seeded with its own access walk.
+  - At a destination candidate's line-stop, an egress edge leads to a virtual `END` state.
+  - Dijkstra picks the best combination.
+  - A place-to-place route needs at least one train. The result also carries `direct_walk_min`,
+    so the UI can say "or walk ~N min" when that's quicker.
+- **Far legs:**
+  - They are costed as walking, only for choosing between candidates.
+  - They are **excluded from `journey_min` / `expected_min`**.
+  - The UI shows "X km to [station], consider e-hailing/bus" instead of a walk time.
+  - Times are labelled as excluding that leg.
+
+**Output:**
+- The first and last legs are `{type: "access" | "egress", place, stop, dist_m, walk_min, far}`.
+- They're shown as "Walk 800 m (~12 min) to Kuchai".
+
+**Failures (graceful):**
+- **Location denied, unavailable or timed out:** show a message, and the input stays usable for
+  stations and places.
+- **Geocoder down or errored:** show "Place search unavailable", and station search keeps working.
+- **Nothing matches:** show "No matching stations or places".
+
 ## 5. Validation checks (`scripts/validate.py`, run by the build)
 
 Errors: the build writes nothing, and CI doesn't deploy. Warnings: stored in `meta.warnings`,
@@ -306,6 +355,14 @@ and the site shows a banner.
   - No station twice: a synthetic network whose only path revisits a station returns no route.
     Real station pairs are also swept to check no returned route revisits one.
 - `node tests/known-routes-report.mjs` prints a markdown table of every case.
+- `tests/access.test.mjs` tests the access-leg logic on synthetic coordinates:
+  - picking the 4 nearest stations within 2 km
+  - the 2 km cut-off
+  - falling back to the nearest 2 marked `far`
+  - the walk-time formula
+  - the virtual start/end choosing the best combination
+  - far legs excluded from the times
+  - `direct_walk_min`
 
 ## 7. GitHub Action (`.github/workflows/pages.yml`, M3)
 
@@ -345,9 +402,10 @@ fallback. To update it, rebuild locally and commit.
    - a minimal page with station pickers, day type and time
    - `router.test.mjs` with `known-routes.json`
 4. **M3 – deploy — DONE:** the Pages Action described in section 7.
-5. **M4 – timetable-aware KTM:** real departures (next train after arrival) instead of headway / 2,
+5. **M4 – places:** search from and to a place or the current location, with access legs (§4b).
+6. **M5 – timetable-aware KTM:** real departures (next train after arrival) instead of headway / 2,
    respecting `calendar_dates`.
-6. **Later / optional:**
+7. **Later / optional:**
    - Skypark line
    - Ekspres all-stop after 23:00
    - Transit peak headway once the peak hours are known

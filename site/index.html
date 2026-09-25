@@ -19,14 +19,16 @@
     <div class="pickers">
       <div class="picker" data-role="from">
         <label for="from">From</label>
-        <input id="from" type="text" placeholder="Station" role="combobox" aria-expanded="false" aria-controls="from-list" aria-autocomplete="list">
+        <input id="from" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="from-list" aria-autocomplete="list">
         <ul id="from-list" class="suggest" role="listbox" hidden></ul>
+        <p id="from-msg" class="pick-msg" role="status" hidden></p>
       </div>
       <button type="button" id="swap" class="swap" aria-label="Swap origin and destination">⇅</button>
       <div class="picker" data-role="to">
         <label for="to">To</label>
-        <input id="to" type="text" placeholder="Station" role="combobox" aria-expanded="false" aria-controls="to-list" aria-autocomplete="list">
+        <input id="to" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="to-list" aria-autocomplete="list">
         <ul id="to-list" class="suggest" role="listbox" hidden></ul>
+        <p id="to-msg" class="pick-msg" role="status" hidden></p>
       </div>
     </div>
     <div class="when">
@@ -48,6 +50,7 @@
 
 <footer>
   <p>Waits are estimated from average train frequency, not live timetables. Data: Prasarana rapid-rail-kl and KTMB GTFS static feeds; KLIA Ekspres / KLIA Transit from ERL's published figures.</p>
+  <p>Place search by <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Only the text you type is sent to Photon; your current location stays in your browser.</p>
 </footer>
 
 <script type="module" src="app.js"></script>

@@ -101,3 +101,12 @@ input:focus, select:focus, .swap:focus { outline: 2px solid var(--accent); outli
 .est { font-size: .72rem; color: var(--warn-text); background: var(--warn-bg); border-radius: 4px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
 details.stops { font-size: .82rem; color: var(--muted); }
 details.stops summary { cursor: pointer; }
+
+.suggest .icon { width: 22px; text-align: center; color: var(--accent); flex: none; }
+.suggest li.info { display: block; cursor: default; color: var(--muted); font-size: .8rem; }
+.suggest li.info:hover { background: none; }
+.suggest li.attr { font-size: .72rem; border-top: 1px solid var(--line); border-radius: 0; margin-top: 4px; }
+a { color: var(--accent); }
+.pick-msg { margin: 4px 2px 0; font-size: .8rem; color: var(--warn-text); }
+.far { color: var(--warn-text); }
+.note.ok { color: var(--text); background: var(--bg); }
