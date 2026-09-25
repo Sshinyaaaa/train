@@ -67,7 +67,7 @@ scripts/
   build_network.py            GTFS + overrides -> site/data/network.json (runs validate)
   validate.py                 section 5 checks; exit 1 on errors
   seed_transfers.py           one-off: reviewed draft table -> overrides/transfers.json
-  audit_gtfs.py, audit_interchanges.py
+  audit_gtfs.py, audit_interchanges.py, inspect_pattern.py   (read-only reports)
 site/
   index.html, app.js, router.js          (M2)
   data/network.json           committed; last good build
@@ -191,6 +191,12 @@ timetable; waiting is estimated.
   - *Fewest transfers*: Dijkstra on (boardings, minutes).
 
   Both are returned, deduplicated.
+- **Two times per route:**
+  - `journey_min`: from boarding the first train to arrival. It includes ride time, transfer walks,
+    gate penalties and the waits at *transfers*.
+  - `expected_min`: `journey_min` plus the initial wait (headway / 2 at the first boarding).
+  - The UI shows both. Tests assert against `journey_min`.
+  - Dijkstra minimises `expected_min`, so the initial wait still affects which line is chosen.
 - **Output:**
   - Legs are line, from, to, stop count, ride time, and wait.
   - Transfers show walk time, and an "exits fare gates" flag when `exits_gates` is true.
@@ -232,12 +238,27 @@ and the site shows a banner.
   - manual walk values win
   - with real feeds, if `data/raw/` is present: no errors, KTMB route filter, a lapsed KTMB still
     has service, and Transit estimates sum to 39 min
-- `tests/known-routes.json` is written by the owner:
+- `tests/known-routes.json` holds the owner's expected values:
   ```json
-  [ { "from": "Gombak", "to": "KLIA T2", "day": "weekday", "time": "08:00",
-      "expect": { "via_lines": ["rapid:KJ", "erl-klia-ekspres"], "max_transfers": 1, "max_minutes": 90 } } ]
+  [ { "from": "Gombak", "to": "KLCC", "from_station": "st:rapid:KJ1", "to_station": "st:rapid:KJ10",
+      "source": "google-maps via gemini",
+      "expect": { "max_minutes": 29, "max_transfers": 0 },
+      "reference": { "minutes": 23, "transfers": 0, "lines": ["Kelana Jaya Line"] } } ]
   ```
-  All `expect` fields are optional, and only the fields present are asserted.
+  - `from_station` / `to_station` are station IDs, so names like "Kajang" and "KL Sentral" can't
+    match the wrong station.
+  - Only `expect` is asserted:
+    - `max_minutes` is ⌈reference × 1.25⌉, checked against the router's **`journey_min`** (not
+      `expected_min`).
+    - `max_transfers` is the reference count, +1 if the route uses a `connecting` transfer.
+  - `reference` is informational only.
+  - `day` / `time` are optional per case. The runner default is **weekday 11:00**, since the
+    reference figures assume it.
+  - `"status": "disputed"`: the case still runs, but a miss is **reported as a warning**, not a
+    failure. The `dispute` field says why.
+    - Current case: Kajang → Kwasa Damansara. The GTFS gives 88.1 min against Google's 70.
+    - `scripts/inspect_pattern.py` prints per-segment in-train times and dwells for any rapid
+      route.
 - `tests/router.test.mjs` (M2) runs `router.js` against `site/data/network.json` and
   `known-routes.json` with `node --test`.
 
