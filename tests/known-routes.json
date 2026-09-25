@@ -1,35 +1,6 @@
 [
- {
-  "from": "Gombak", "to": "KLCC",
-  "from_station": "st:rapid:KJ1", "to_station": "st:rapid:KJ10",
-  "source": "google-maps via gemini",
-  "expect": {"max_minutes": 29, "max_transfers": 0},
-  "reference": {"minutes": 23, "transfers": 0, "lines": ["Kelana Jaya Line"], "transfer_stations": []}
- },
- {
-  "from": "Kajang", "to": "Kwasa Damansara",
-  "from_station": "st:rapid:KG35", "to_station": "st:rapid:KG04",
-  "source": "google-maps via gemini",
-  "expect": {"max_minutes": 88, "max_transfers": 0},
-  "reference": {"minutes": 70, "transfers": 0, "lines": ["Kajang Line"], "transfer_stations": []},
-  "status": "disputed",
-  "dispute": "GTFS template KG35->KG04 is 88.1 min (75.0 in-train + 13.1 dwell) vs Google 70. No segment > 2x the line median (180 s; max 240 s) and no dwell > 60 s (max 40 s). All 168 KGL in-train segment times are whole minutes (120/180/240 s), unlike AG/KJ/SA (0 whole-minute segments). Data unchanged. See scripts/inspect_pattern.py KGL KG35 KG04.",
-  "note": "'Kajang' resolved to the MRT Kajang Line station (KG35), not KTM Kajang (20400), per the line Google used"
- },
- {
-  "from": "Putrajaya Sentral", "to": "KL Sentral",
-  "from_station": "st:erl-klia-transit:putrajaya_sentral", "to_station": "st:erl-klia-ekspres:kl_sentral",
-  "source": "google-maps via gemini",
-  "expect": {"max_minutes": 24, "max_transfers": 0},
-  "reference": {"minutes": 19, "transfers": 0, "lines": ["KLIA Transit Line"], "transfer_stations": []},
-  "note": "'Putrajaya Sentral' resolved to the KLIA Transit station, not MRT PY41; 'KL Sentral' to the hub station (KTM/KJ/ERL), not Monorail MR1"
- },
- {
-  "from": "Batu Caves", "to": "Mid Valley",
-  "from_station": "st:ktmb:50600", "to_station": "st:ktmb:19205",
-  "source": "google-maps via gemini",
-  "expect": {"max_minutes": 48, "max_transfers": 0},
-  "reference": {"minutes": 38, "transfers": 0, "lines": ["KTM Komuter Batu Caves–Pulau Sebang Line"], "transfer_stations": []},
-  "note": "'Mid Valley' = KTMB stop 19205 PERHENTIAN MIDVALLEY"
- }
+ {"from": "Gombak", "to": "KLCC", "from_station": "st:rapid:KJ1", "to_station": "st:rapid:KJ10", "source": "gemini, unverified (not from Maps routing)", "verified": false, "expect": {"max_minutes": 29, "max_transfers": 0}, "reference": {"minutes": 23, "transfers": 0, "lines": ["Kelana Jaya Line"], "transfer_stations": []}},
+ {"from": "Kajang", "to": "Kwasa Damansara", "from_station": "st:rapid:KG35", "to_station": "st:rapid:KG04", "source": "gemini, unverified (not from Maps routing)", "verified": false, "status": "disputed", "expect": {"max_minutes": 88, "max_transfers": 0}, "reference": {"minutes": 70, "transfers": 0, "lines": ["Kajang Line"], "transfer_stations": []}, "dispute": "GTFS template KG35->KG04 is 88.1 min (75.0 in-train + 13.1 dwell). The 70-min comparison figure is unverified (Gemini, not Maps routing). Feed findings stand: no segment > 2x the line median (180 s; max 240 s), no dwell > 60 s (max 40 s), and all 168 KGL in-train segment times are whole minutes (120/180/240 s), unlike AG/KJ/SA (0 whole-minute segments). Data unchanged. See scripts/inspect_pattern.py KGL KG35 KG04.", "note": "'Kajang' resolved to the MRT Kajang Line station (KG35), not KTM Kajang (20400), per the line in the reference"},
+ {"from": "Putrajaya Sentral", "to": "KL Sentral", "from_station": "st:erl-klia-transit:putrajaya_sentral", "to_station": "st:erl-klia-ekspres:kl_sentral", "source": "gemini, unverified (not from Maps routing)", "verified": false, "expect": {"max_minutes": 24, "max_transfers": 0}, "reference": {"minutes": 19, "transfers": 0, "lines": ["KLIA Transit Line"], "transfer_stations": []}, "note": "'Putrajaya Sentral' resolved to the KLIA Transit station, not MRT PY41; 'KL Sentral' to the hub station (KTM/KJ/ERL), not Monorail MR1"},
+ {"from": "Batu Caves", "to": "Mid Valley", "from_station": "st:ktmb:50600", "to_station": "st:ktmb:19205", "source": "gemini, unverified (not from Maps routing)", "verified": false, "expect": {"max_minutes": 48, "max_transfers": 0}, "reference": {"minutes": 38, "transfers": 0, "lines": ["KTM Komuter Batu Caves–Pulau Sebang Line"], "transfer_stations": []}, "note": "'Mid Valley' = KTMB stop 19205 PERHENTIAN MIDVALLEY"}
 ]

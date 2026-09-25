@@ -241,22 +241,26 @@ and the site shows a banner.
 - `tests/known-routes.json` holds the owner's expected values:
   ```json
   [ { "from": "Gombak", "to": "KLCC", "from_station": "st:rapid:KJ1", "to_station": "st:rapid:KJ10",
-      "source": "google-maps via gemini",
+      "source": "gemini, unverified (not from Maps routing)", "verified": false,
       "expect": { "max_minutes": 29, "max_transfers": 0 },
       "reference": { "minutes": 23, "transfers": 0, "lines": ["Kelana Jaya Line"] } } ]
   ```
   - `from_station` / `to_station` are station IDs, so names like "Kajang" and "KL Sentral" can't
     match the wrong station.
-  - Only `expect` is asserted:
+  - **`verified`**: only `verified: true` cases can fail the test run. For `verified: false`, a
+    miss is **reported as a warning**. All 4 current cases are `false`: their reference values came
+    from Gemini, which cannot query Google Maps routing. The owner will replace them with checked
+    values.
+  - `expect` is what gets checked:
     - `max_minutes` is ⌈reference × 1.25⌉, checked against the router's **`journey_min`** (not
       `expected_min`).
     - `max_transfers` is the reference count, +1 if the route uses a `connecting` transfer.
   - `reference` is informational only.
-  - `day` / `time` are optional per case. The runner default is **weekday 11:00**, since the
-    reference figures assume it.
-  - `"status": "disputed"`: the case still runs, but a miss is **reported as a warning**, not a
-    failure. The `dispute` field says why.
-    - Current case: Kajang → Kwasa Damansara. The GTFS gives 88.1 min against Google's 70.
+  - `day` / `time` are optional per case. The runner default is **weekday 11:00**.
+  - `"status": "disputed"` plus a `dispute` field records a known disagreement. On its own it
+    doesn't change the pass/fail rule; that follows `verified`.
+    - Current case: Kajang → Kwasa Damansara. The GTFS gives 88.1 min, and the 70-min comparison
+      figure is unverified.
     - `scripts/inspect_pattern.py` prints per-segment in-train times and dwells for any rapid
       route.
 - `tests/router.test.mjs` (M2) runs `router.js` against `site/data/network.json` and
