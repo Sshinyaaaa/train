@@ -1,7 +1,7 @@
 // Route filter tests on synthetic networks (PLAN.md §4c). Run: node --test tests/*.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadNetwork, route, suggestModes, accessCandidates, distanceM, MODES } from "../site/router.js";
+import { loadNetwork, route, suggestModes, accessCandidates, blockedNearby, distanceM, MODES } from "../site/router.js";
 
 const LAT = 3.0;
 const M_PER_DEG_LON = distanceM({ lat: LAT, lon: 101 }, { lat: LAT, lon: 102 });
@@ -97,4 +97,18 @@ test("max walk changes the route: a far first walk is excluded from the times", 
   assert.equal(far.legs[0].walk_min, null);
   assert.ok(far.journey_min < near.journey_min);   // the 700 m walk is no longer counted
   assert.equal(far.excludes_far_access, true);
+});
+
+test("blockedNearby: closer stations served only by switched-off modes", () => {
+  // Place at 0: MRT-only station 260 m away, LRT+MRT station 500 m, KTM-only 3 km.
+  const g = makeNet({ M: 260, LM: 500, K: 3000, D: 20000 }, {
+    MRT: { mode: "MRT", stops: ["M", "LM", "D"], run: [0, 300, 900] },
+    LRT: { mode: "LRT", stops: ["LM", "D"], run: [0, 600] },
+    KTM: { mode: "KTM", stops: ["K", "D"], run: [0, 600] },
+  });
+  const b = blockedNearby(g.net, place(0), { modes: ["LRT"], maxDistM: 1000 });
+  assert.deepEqual(b.map((x) => [x.station, x.modes]), [["M", ["MRT"]]]);   // LM has LRT: not blocked; K too far
+  assert.ok(Math.abs(b[0].dist_m - 260) < 1);
+  assert.deepEqual(blockedNearby(g.net, place(0), { modes: ["LRT"], maxDistM: 5000 }).map((x) => x.station), ["M", "K"]);
+  assert.deepEqual(blockedNearby(g.net, place(0), { modes: null }), []);     // all modes on: nothing blocked
 });

@@ -1,4 +1,4 @@
-import { loadNetwork, route, suggestModes, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
+import { loadNetwork, route, suggestModes, blockedNearby, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
 const PHOTON = "https://photon.komoot.io/api/";
@@ -249,23 +249,35 @@ const estTags = (flags) => flags.filter((f) => FLAG_TEXT[f]).map((f) => `<span c
 const farAccess = (dist, station) => `${fmtDist(dist)} to ${station}, consider e-hailing`;
 const farEgress = (dist, station, place) => `${fmtDist(dist)} from ${station} to ${place}, consider e-hailing`;
 
+// A closer station that only switched-off modes serve, for the first/last stretch of a place search.
+function blockedHint(leg, point) {
+  if (!point || point.type !== "place") return "";
+  const b = blockedNearby(net, point, { modes: filters.modes, maxDistM: filters.maxWalkM }).find((x) => x.dist_m < leg.dist_m);
+  if (!b) return "";
+  const ms = b.modes.join(", ");
+  return `<div class="hint">${esc(pretty(net.stations[b.station].name))} (${esc(ms)}) is ${fmtDist(b.dist_m)} away, but ${esc(ms)} ${b.modes.length > 1 ? "are" : "is"} switched off.
+    <button type="button" class="linkbtn" data-enable-modes="${b.modes.join(",")}">Turn on ${esc(ms)}</button></div>`;
+}
+
 function journeyHtml(r) {
   const rows = [];
   const node = (c, st, detail) => rows.push(`<li class="stop"><div class="rail" style="--c:${c}"><span class="node"></span></div>
     <div class="body"><div class="st">${st}</div>${detail ? `<div class="detail">${detail}</div>` : ""}</div></li>`);
-  const seg = (c, dashed, detail) => rows.push(`<li class="stop"><div class="rail${dashed ? " dashed" : ""}" style="--c:${c}"></div>
-    <div class="body"><div class="detail">${detail}</div></div></li>`);
+  const seg = (c, dashed, detail, extra = "") => rows.push(`<li class="stop"><div class="rail${dashed ? " dashed" : ""}" style="--c:${c}"></div>
+    <div class="body"><div class="detail">${detail}</div>${extra}</div></li>`);
   const W = "var(--walk)";
   r.legs.forEach((leg, i) => {
     if (leg.type === "access") {
       node(W, esc(leg.place), "Start");
       seg(W, true, leg.far
         ? `<span class="far">${esc(farAccess(leg.dist_m, stopName(leg.stop)))}</span>`
-        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(stopName(leg.stop))}`);
+        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(stopName(leg.stop))}`,
+        blockedHint(leg, picked.from));
     } else if (leg.type === "egress") {
       seg(W, true, leg.far
         ? `<span class="far">${esc(farEgress(leg.dist_m, stopName(leg.stop), leg.place))}</span>`
-        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(leg.place)}`);
+        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(leg.place)}`,
+        blockedHint(leg, picked.to));
       node(W, esc(leg.place), "Arrive");
     } else if (leg.type === "ride") {
       const c = color(leg.line);
@@ -351,8 +363,9 @@ function render() {
 
 function wireResultButtons(out) {
   out.querySelectorAll("[data-reset]").forEach((b) => b.addEventListener("click", resetFilters));
-  out.querySelectorAll("[data-enable]").forEach((b) => b.addEventListener("click", () => {
-    if (!filters.modes.includes(b.dataset.enable)) filters.modes.push(b.dataset.enable);
+  out.querySelectorAll("[data-enable], [data-enable-modes]").forEach((b) => b.addEventListener("click", () => {
+    const add = (b.dataset.enable || b.dataset.enableModes).split(",");
+    filters.modes = MODES.filter((m) => filters.modes.includes(m) || add.includes(m));
     applyFilters();
   }));
 }

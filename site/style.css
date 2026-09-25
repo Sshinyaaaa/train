@@ -125,3 +125,5 @@ a { color: var(--accent); }
 .linkbtn { font: inherit; font-size: .8rem; background: none; border: 0; padding: 4px 0; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .filters-note { font-size: .8rem; color: var(--muted); margin: 0 0 8px; }
 .msg .linkbtn { font-size: inherit; }
+.hint { margin-top: 4px; font-size: .8rem; color: var(--warn-text); background: var(--warn-bg); border-radius: 6px; padding: 4px 8px; }
+.hint .linkbtn { font-size: .8rem; }

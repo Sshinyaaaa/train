@@ -325,3 +325,18 @@ export function suggestModes(g, fromEp, toEp, query = DEFAULT_QUERY) {
   }
   return out.sort((a, b) => a.expected_min - b.expected_min);
 }
+
+// Stations within maxDistM of a point that only switched-off modes serve, nearest first, with those
+// modes. Lets the UI say "16 Sierra (MRT) is 260 m away, but MRT is switched off" (PLAN.md §4c).
+export function blockedNearby(net, point, { maxDistM = DEFAULT_QUERY.maxWalkM, modes = null } = {}) {
+  const enabled = enabledSet(modes);
+  if (!enabled) return [];
+  const out = [];
+  for (const [id, st] of Object.entries(net.stations)) {
+    const stModes = new Set(st.stops.flatMap((s) => net.stops[s].lines.map((l) => lineMode(net, l))));
+    if ([...stModes].some((m) => enabled.has(m))) continue;
+    const dist = Math.min(...st.stops.map((s) => distanceM(point, net.stops[s])));
+    if (dist <= maxDistM) out.push({ station: id, dist_m: dist, modes: MODES.filter((m) => stModes.has(m)) });
+  }
+  return out.sort((a, b) => a.dist_m - b.dist_m);
+}

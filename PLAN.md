@@ -327,6 +327,11 @@ A place is `{type: "place", lat, lon, name}`.
   a button that enables it.
 - If even all modes give no route, the normal no-route message is shown.
 
+**Hint when a filter hides a closer station.**
+- `blockedNearby()` lists the stations within the max walk that only switched-off modes serve.
+- If one is closer than the station a first or last walk uses, the page shows e.g. "16 Sierra
+  (MRT) is 260 m away, but MRT is switched off. Turn on MRT", with a one-tap enable.
+
 **UI and persistence.**
 - Mode chips (multi-select toggle buttons) and a max-walk select sit under day/time.
 - Filters and max walk are saved in `localStorage` under `klrail.filters`, inside try/catch. If
