@@ -101,3 +101,14 @@ test("real network: no returned route visits a station twice", () => {
   }
   assert.ok(checked > 300, `checked ${checked}`);
 });
+
+test("Rasa -> KL Sentral is a direct southbound ride (feed-gap override), flagged estimated", () => {
+  const r = route(g, "st:ktmb:16300", "st:erl-klia-ekspres:kl_sentral").fastest;
+  assert.equal(r.transfers, 0);
+  assert.deepEqual(r.lines, ["ktmb:KA15_KD19"]);
+  assert.ok(r.flags.includes("estimated_run"));
+  assert.equal(new Set(r.stations).size, r.stations.length);
+  // northbound comes straight from the feed: no estimated_run flag
+  const back = route(g, "st:erl-klia-ekspres:kl_sentral", "st:ktmb:16300").fastest;
+  assert.ok(!back.flags.includes("estimated_run"));
+});

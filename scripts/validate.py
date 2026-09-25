@@ -75,6 +75,11 @@ def validate(net, today=None):
             for day in DAY_TYPES:
                 if not p["headways"].get(day):
                     errors.append(f"{lid} dir {p['dir']}: no headway for {day}")
+            est = p.get("estimated_segments", [])
+            if any(not 0 <= i < len(p["stops"]) - 1 for i in est):
+                errors.append(f"{lid} dir {p['dir']}: estimated_segments out of range")
+            elif est:
+                warnings.append(f"{lid} dir {p['dir']}: {len(est)} segments estimated by pattern override")
 
     # coverage vs reference map counts
     for lid, expected in MAP_COUNTS.items():

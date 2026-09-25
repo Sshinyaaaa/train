@@ -60,6 +60,8 @@ data/raw/                     GTFS zips + extracted feeds            (gitignored
 docs/reference/               RapidKL map PDF                        (gitignored)
 overrides/
   transfers.json              all transfers (no transfers.txt in either feed)
+  patterns.json               feed-gap fixes: stops inserted into a GTFS pattern
+  display.json                map number + full name per line
   lines/erl-klia-ekspres.json
   lines/erl-klia-transit.json
 scripts/
@@ -138,9 +140,14 @@ How the fields are built:
   - the `route_id` column in rapid `stop_times.txt`
   - the `category`, `route_id` and `geometry` columns in rapid `stops.txt`
   - unpadded `H:MM:SS` times
-- **Feed quirk kept as-is:** in the KTMB feed, no southbound (`direction_id 1`) `KA15_KD19`
-  trip stops at Kuala Kubu Bharu (`16100`) or Rasa (`16300`). The router therefore goes south from
-  there via Tanjung Malim.
+- **Feed gap patched by override:** in the KTMB feed, no southbound (`direction_id 1`)
+  `KA15_KD19` trip stops at Kuala Kubu Bharu (`16100`) or Rasa (`16300`), while 33 northbound trips
+  do. `overrides/patterns.json` inserts both stops into the southbound pattern after Tanjung Malim.
+  - Their segment times are mirrored from the northbound pattern.
+  - The pattern's `estimated_segments` marks those segments, and the router flags any ride through
+    them as `estimated_run`.
+  - Side effect: every modelled southbound train now stops there, 60 s longer than the feed's
+    non-stop Tanjung Malim → Batang Kali segment.
 - **Stations:** union-find over `interchange` transfers, plus KTMB stops already shared by both KTM
   lines. The station name joins the distinct stop names with " / ", treating sponsor suffixes as
   the same name, and prefers the manual line's name when there is one.
@@ -165,6 +172,15 @@ How the fields are built:
   - 14 ERL links (KL Sentral hub, BTS, Putrajaya Sentral, KLIA T1/T2)
 
   `transfers.json` is now the source of truth; edit it by hand.
+
+`overrides/patterns.json`: a list of stop insertions into GTFS patterns, for feed gaps.
+```json
+{ "line": "ktmb:KA15_KD19", "dir": 1, "insert_after": "ktmb:15200",
+  "stops": ["ktmb:16100", "ktmb:16300"], "run_from": "opposite_direction", "note": "Feed gap: …" }
+```
+- New segment times come from the opposite-direction pattern. The build errors if the stops aren't
+  adjacent there.
+- The segments are listed in `estimated_segments`, and the note is kept in `patterns[*].overrides`.
 
 `overrides/lines/<id>.json`:
 - a line `id` and `name`, plus `sources`
@@ -192,8 +208,6 @@ timetable; waiting is estimated.
 - **Origin/destination:** every line-stop of the station, at cost 0.
 - **No station twice:** a route may not return to a station it has left. Stations passed through
   on a train count. This is checked per label on its own path.
-  - It does **not** stop the Rasa / Kuala Kubu Bharu turn-back (§2). The southbound pattern
-    doesn't stop there, so the path never revisits them.
 - **Routes returned:**
   - *Fastest*: Dijkstra on minutes.
   - *Fewest transfers*: Dijkstra on (boardings, minutes).

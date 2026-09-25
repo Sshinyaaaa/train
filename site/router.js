@@ -159,15 +159,20 @@ function buildRoute(g, label) {
                line_number: line.display?.number ?? "", line_name: line.display?.name ?? line.name, color: line.color,
                towards: p.stops[p.stops.length - 1], from: p.stops[e.i], to: p.stops[e.i], stops: [p.stops[e.i]],
                ride_min: 0, wait_min: round1(e.wait), headway_min: round1(e.headway),
-               run_source: p.run_source, headway_source: p.headway_source, flags: [], _start: p.run_sec[e.i] };
+               run_source: p.run_source, headway_source: p.headway_source, flags: [], _start: p.run_sec[e.i],
+               _pi: p, _i0: e.i, _i1: e.i };
       if (p.run_source === "estimated") ride.flags.push("estimated_run");
       if (p.headway_source === "gtfs_typical") ride.flags.push("typical_headway");
     } else if (e.type === "ride") {
       const p = net.lines[e.line].patterns[e.pi];
       ride.to = p.stops[e.to]; ride.stops.push(p.stops[e.to]);
       ride.ride_min = round1(p.run_sec[e.to] - ride._start);
+      ride._i1 = e.to;
     } else if (e.type === "alight") {
-      delete ride._start;
+      // segment-level estimates (pattern overrides): segment i is stops[i] -> stops[i+1]
+      const est = ride._pi.estimated_segments || [];
+      if (!ride.flags.includes("estimated_run") && est.some((i) => i >= ride._i0 && i < ride._i1)) ride.flags.push("estimated_run");
+      delete ride._start; delete ride._pi; delete ride._i0; delete ride._i1;
       legs.push(ride); ride = null;
     } else if (e.type === "transfer") {
       const t = e.t, flags = [];

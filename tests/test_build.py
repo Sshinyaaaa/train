@@ -112,6 +112,17 @@ class RealFeeds(unittest.TestCase):
         for p in self.net["lines"]["ktmb:KC05_KB18"]["patterns"]:
             self.assertTrue(p["headways"]["weekday"])
 
+    def test_rasa_kkb_pattern_override(self):
+        south = next(p for p in self.net["lines"]["ktmb:KA15_KD19"]["patterns"] if p["dir"] == 1)
+        north = next(p for p in self.net["lines"]["ktmb:KA15_KD19"]["patterns"] if p["dir"] == 0)
+        self.assertEqual(south["stops"][:4], ["ktmb:15200", "ktmb:16100", "ktmb:16300", "ktmb:16500"])
+        self.assertEqual(south["estimated_segments"], [0, 1, 2])
+        # mirrored: southbound 15200->16100 equals northbound 16100->15200
+        n = north["stops"]
+        self.assertEqual(south["run_sec"][1] - south["run_sec"][0],
+                         north["run_sec"][n.index("ktmb:15200")] - north["run_sec"][n.index("ktmb:16100")])
+        self.assertEqual(len(set(south["stops"])), len(south["stops"]))
+
     def test_transit_run_estimated_sums_to_official_total(self):
         for p in self.net["lines"]["erl-klia-transit"]["patterns"]:
             self.assertEqual(p["run_source"], "estimated")

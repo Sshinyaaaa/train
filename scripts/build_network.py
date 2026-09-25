@@ -217,6 +217,44 @@ def station_name(names):
     return " / ".join(kept)
 
 
+def apply_pattern_overrides(lines, notes):
+    """Insert stops into a GTFS pattern (feed gaps). New segment times are mirrored from the
+    opposite-direction pattern and recorded in the pattern's `estimated_segments`."""
+    path = OVERRIDES / "patterns.json"
+    if not path.exists():
+        return
+    for o in json.loads(path.read_text(encoding="utf-8")):
+        line = lines[o["line"]]
+        p = next(p for p in line["patterns"] if p["dir"] == o["dir"])
+        opp = next(q for q in line["patterns"] if q["dir"] != o["dir"])
+        at = p["stops"].index(o["insert_after"])
+        if any(s in p["stops"] for s in o["stops"]):
+            raise ValueError(f"pattern override {o['line']} dir {o['dir']}: stop already in pattern")
+        new_seq = [p["stops"][at], *o["stops"], p["stops"][at + 1]]
+        if o["run_from"] != "opposite_direction":
+            raise ValueError(f"unknown run_from {o['run_from']!r}")
+        seg = []
+        for a, b in zip(new_seq, new_seq[1:]):  # a->b here is b->a in the opposite pattern
+            i, j = opp["stops"].index(b), opp["stops"].index(a)
+            if j != i + 1:
+                raise ValueError(f"pattern override: {b} -> {a} not adjacent in opposite direction")
+            seg.append(opp["run_sec"][j] - opp["run_sec"][i])
+        old_seg = p["run_sec"][at + 1] - p["run_sec"][at]
+        shift = sum(seg) - old_seg
+        run = p["run_sec"][: at + 1]
+        for d in seg[:-1]:
+            run.append(run[-1] + d)
+        run += [r + shift for r in p["run_sec"][at + 1:]]
+        p["stops"] = p["stops"][: at + 1] + o["stops"] + p["stops"][at + 1:]
+        p["run_sec"] = run
+        est = set(p.get("estimated_segments", []))
+        est = {i + len(o["stops"]) if i > at else i for i in est} | set(range(at, at + len(seg)))
+        p["estimated_segments"] = sorted(est)
+        p.setdefault("overrides", []).append(o["note"])
+        notes.append(f"{o['line']} dir {o['dir']}: inserted {', '.join(o['stops'])} after {o['insert_after']} "
+                     f"(times mirrored from opposite direction, estimated)")
+
+
 def group_stations(line_stops, transfers):
     parent = {s: s for s in line_stops}
 
@@ -252,6 +290,7 @@ def build(today):
     stops.update(ktm_stops)
     manual_lines, manual_notes = load_manual_lines(stops)
     lines = {**rapid_lines, **ktm_lines, **manual_lines}
+    apply_pattern_overrides(lines, manual_notes)
     display = json.loads((OVERRIDES / "display.json").read_text(encoding="utf-8"))["lines"]
     for lid, line in lines.items():
         d = display.get(lid)

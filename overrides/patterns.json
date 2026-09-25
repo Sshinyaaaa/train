@@ -1,0 +1,10 @@
+[
+ {
+  "line": "ktmb:KA15_KD19",
+  "dir": 1,
+  "insert_after": "ktmb:15200",
+  "stops": ["ktmb:16100", "ktmb:16300"],
+  "run_from": "opposite_direction",
+  "note": "Feed gap: in the KTMB GTFS no southbound (direction_id 1) KA15_KD19 trip stops at Kuala Kubu Bharu (16100) or Rasa (16300), while 33 northbound trips do. Added to the southbound pattern with segment times mirrored from the northbound pattern; marked estimated. Headway is the pattern's typical headway, not a Rasa-specific one."
+ }
+]
