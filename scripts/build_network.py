@@ -183,9 +183,17 @@ def load_manual_lines(line_stops):
             if run is None and p.get("run_estimate", {}).get("method") == "distance_split":
                 run = distance_split([coords[s] for s in p["stops"]], p["run_estimate"]["total_sec"])
                 run_src = "estimated"
-            pats.append({"dir": p["dir"], "stops": [f"{lid}:{s}" for s in p["stops"]], "run_sec": run,
-                         "run_source": run_src, "headways": p.get("headways") or {},
-                         "headway_source": p.get("headway_source", "official")})
+            pat = {"dir": p["dir"], "stops": [f"{lid}:{s}" for s in p["stops"]], "run_sec": run,
+                   "run_source": run_src, "headways": p.get("headways") or {},
+                   "headway_source": p.get("headway_source", "official")}
+            if p.get("run_source_detail"):
+                pat["run_source_detail"] = p["run_source_detail"]
+            if p.get("service_hours"):
+                # first/last departure from the pattern's first stop; GTFS 24:00+ for after midnight
+                sh = p["service_hours"]
+                pat["service_hours"] = [to_secs(sh["first"] + ":00"), to_secs(sh["last"] + ":00")]
+                pat["service_hours_source"] = p.get("service_hours_source", "")
+            pats.append(pat)
         lines[lid] = {"name": spec["name"], "short": spec.get("short", spec["name"]), "color": spec.get("color"),
                       "source": "manual", "sources": spec.get("sources", []), "patterns": pats}
         if spec.get("not_modelled"):

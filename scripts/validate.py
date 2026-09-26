@@ -78,6 +78,9 @@ def validate(net, today=None):
             for day in DAY_TYPES:
                 if not p["headways"].get(day):
                     errors.append(f"{lid} dir {p['dir']}: no headway for {day}")
+            sh = p.get("service_hours")
+            if sh is not None and not (len(sh) == 2 and 0 <= sh[0] < sh[1] <= 30 * 3600):
+                errors.append(f"{lid} dir {p['dir']}: bad service_hours {sh}")
             est = p.get("estimated_segments", [])
             if any(not 0 <= i < len(p["stops"]) - 1 for i in est):
                 errors.append(f"{lid} dir {p['dir']}: estimated_segments out of range")

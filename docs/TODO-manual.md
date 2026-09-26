@@ -14,9 +14,10 @@ estimated in the build warnings and in route output. A manual value always repla
 3. **Fare-gate flags**: `exits_gates` is unset on all 70 transfers, and unset counts as no penalty.
    Set `true`/`false`: `overrides/transfers.json`. The penalty is 5 min; change it in
    `scripts/build_network.py` `CONFIG["gate_penalty_min"]`.
-4. **KLIA Transit timings (optional)**: inter-station times are estimated by distance split. If you
-   find official per-segment times, or the weekday peak hours for the 15-min headway, set `run_sec`
-   / `headways` in `overrides/lines/erl-klia-transit.json`, and cite the source in `sources`.
+4. **KLIA Transit peak hours (optional)**: run times and service hours are now official. Only the
+   weekday peak hours for the 15-min headway are unknown; weekdays use 30 min. If you find them, add
+   a weekday headway band in `overrides/lines/erl-klia-transit.json` and cite the source in
+   `sources`.
 5. **Known routes**: write `tests/known-routes.json` (format in PLAN.md §6).
 
 Deferred: the Skypark line (PLAN.md §0).

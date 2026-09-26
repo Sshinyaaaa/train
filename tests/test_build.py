@@ -87,6 +87,11 @@ class Validation(unittest.TestCase):
         net["lines"]["x:L"]["display"]["mode"] = "Tram"
         self.assertTrue(any("display mode 'Tram'" in e for e in self.errors(net)))
 
+    def test_bad_service_hours(self):
+        net = tiny_net()
+        net["lines"]["x:L"]["patterns"][0]["service_hours"] = [80000, 70000]
+        self.assertTrue(any("bad service_hours" in e for e in self.errors(net)))
+
     def test_out_of_scope_ktmb_line(self):
         net = tiny_net()
         net["lines"]["ktmb:ETS"] = {"color": "#000", "display": {"number": "x", "name": "x", "mode": "KTM"}, "patterns": []}
@@ -130,10 +135,15 @@ class RealFeeds(unittest.TestCase):
                          north["run_sec"][n.index("ktmb:15200")] - north["run_sec"][n.index("ktmb:16100")])
         self.assertEqual(len(set(south["stops"])), len(south["stops"]))
 
-    def test_transit_run_estimated_sums_to_official_total(self):
-        for p in self.net["lines"]["erl-klia-transit"]["patterns"]:
-            self.assertEqual(p["run_source"], "estimated")
-            self.assertEqual(p["run_sec"][-1], 2340)
+    def test_transit_official_run_times_and_service_hours(self):
+        t = {p["dir"]: p for p in self.net["lines"]["erl-klia-transit"]["patterns"]}
+        # differences between consecutive stations on the official first/last train table
+        self.assertEqual(t[0]["run_sec"], [0, 420, 1140, 1740, 2160, 2340])
+        self.assertEqual(t[1]["run_sec"], [0, 240, 660, 1200, 1860, 2340])
+        self.assertEqual(t[0]["run_source"], "official")
+        self.assertEqual(t[0]["service_hours"], [5 * 3600 + 3 * 60, 24 * 3600 + 3 * 60])     # 05:03-24:03
+        self.assertEqual(t[1]["service_hours"], [5 * 3600 + 18 * 60, 24 * 3600 + 30 * 60])   # 05:18-24:30
+        self.assertFalse(any("erl-klia-transit: run times are estimated" in w for w in self.warnings))
 
 
 class ManualOverrideWins(unittest.TestCase):

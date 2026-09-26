@@ -1,4 +1,4 @@
-import { loadNetwork, route, suggestModes, blockedNearby, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
+import { loadNetwork, route, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
 const PHOTON = "https://photon.komoot.io/api/";
@@ -339,7 +339,7 @@ function render() {
     const d = distanceM(pointOf(from), pointOf(to));
     const walk = from.type === "place" || to.type === "place"
       ? ` Walking directly is about ${fmtMin(walkSec(d) / 60)} (${fmtDist(d)}).` : "";
-    let html = `<p class="msg">No train route found at this time. Lines may not be running.${walk}</p>`;
+    let html = `<p class="msg">No train route found at this time.${notRunningText(from, q)}${walk}</p>`;
     if (filters.modes.length < MODES.length) {
       const sug = suggestModes(graph, from, to, q);
       const only = filters.modes.length === 1 ? `${filters.modes[0]} only` : modeList(filters.modes);
@@ -359,6 +359,18 @@ function render() {
   out.innerHTML = note + tabs + routeCard(r, res);
   out.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
   wireResultButtons(out);
+}
+
+// Why no route: which lines at the origin can't be boarded at the chosen time (service hours / bands).
+function notRunningText(from, q) {
+  const stops = from.type === "station" ? net.stations[from.id].stops
+    : accessCandidates(net, from, { modes: q.modes, maxDistM: q.maxWalkM }).flatMap((c) => c.stops.map((x) => x.stop));
+  const enabled = new Set(q.modes);
+  const lines = [...new Set(stops.flatMap((s) => net.stops[s].lines))].filter((l) => enabled.has(net.lines[l].display.mode));
+  const off = linesNotRunning(graph, lines, q, stops);
+  if (!off.length) return " Lines may not be running.";
+  const names = off.map((l) => lineLabel(l)).join(", ");
+  return ` ${esc(names)} ${off.length > 1 ? "aren't" : "isn't"} running from here at ${esc(q.time)}.`;
 }
 
 function wireResultButtons(out) {

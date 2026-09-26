@@ -43,8 +43,15 @@ retrieved 2026-09-26. Each line file cites its sources.
   weekday peak and every 30 min off-peak and at weekends. First/last trains are 05:03/00:03 from
   KL Sentral and 05:18/00:30 from T2.
   <https://www.kliaekspres.com/products-fares/klia-transit/>
-- **Transit inter-station times are ESTIMATED.** The official 39 min is split by straight-line
-  distance between stations.
+- **Transit inter-station times are official.** They are the differences between consecutive
+  stations in the per-station first/last train table at
+  <https://www.kliaekspres.com/products-fares/concession-ticket/> (retrieved 2026-09-26; the
+  table's text was checked in the raw HTML).
+  - KL Sentral → KLIA T2: 7, 12, 10, 7, 3 min.
+  - KLIA T2 → KL Sentral: 4, 7, 9, 11, 8 min.
+  - First and last trains give identical gaps.
+- **Transit service hours**, from the same table: KL Sentral 05:03–24:03 and KLIA T2 05:18–24:30,
+  in GTFS 24:00+ notation.
 - **Station coordinates:** KL Sentral uses KTMB `19100`, BTS uses KTMB `19600`, and Putrajaya
   Sentral uses rapid `PY41`. Salak Tinggi, KLIA T1 and KLIA T2 come from their Wikipedia pages.
   KLIA T2 is given to 2 decimal places only, about 1 km precision.
@@ -234,7 +241,17 @@ timetable; waiting is estimated.
   - Transfers show walk time, and an "exits fare gates" flag when `exits_gates` is true.
   - **Every leg or transfer that uses an estimate is flagged**: `run_source: "estimated"`,
     `walk_source: "estimated"`, or `headway_source: "gtfs_typical"` (KTM waits are averages).
+- **Service hours:** a pattern can have `service_hours: [first, last]`, the departures from its
+  first stop in seconds with 24:00+ allowed.
+  - It can be boarded at stop *i* only between `first + run_sec[i]` and `last + run_sec[i]`. An
+    early-morning query is also tried as +24 h.
+  - Its headway is looked up at the matching first-stop time.
+  - Patterns without service hours are limited only by their headway bands.
+  - `linesNotRunning()` lists lines that can't be boarded at the origin at the query time, and
+    the UI uses it to explain a "no route" result.
 - **Known simplifications:**
+  - Waits are average-based, so a query just before the last train still shows "wait up to <full
+    headway>".
   - The headway band is looked up at each boarding using the query time plus elapsed journey
     time. There is no actual timetable, so waits are averages.
   - AG/SP share track from Sentul Timur to Chan Sow Lin but aren't merged, so the wait there is

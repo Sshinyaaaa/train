@@ -52,6 +52,24 @@ export function headwayAt(pattern, day, t) {
   return null;
 }
 
+// Service hours (PLAN.md §4): a pattern with service_hours [first, last] (departures from its first
+// stop, GTFS 24:00+ allowed) can be boarded at stop i only between first + run_sec[i] and
+// last + run_sec[i]. Early-morning clock times are also tried as +24 h.
+export function inService(pattern, i, t) {
+  const sh = pattern.service_hours;
+  if (!sh) return true;
+  const lo = sh[0] + pattern.run_sec[i], hi = sh[1] + pattern.run_sec[i];
+  return [t, t + 86400].some((x) => x >= lo && x <= hi);
+}
+
+// Headway when boarding pattern at stop i at clock time t. For patterns with service hours the
+// bands are defined at the first stop, so look up the matching first-stop departure time.
+function headwayForBoarding(pattern, i, day, t) {
+  if (!pattern.service_hours) return headwayAt(pattern, day, t);
+  if (!inService(pattern, i, t)) return null;
+  return headwayAt(pattern, day, t - pattern.run_sec[i]);
+}
+
 function transferCost(g, t) {
   return (t.walk_min + (t.exits_gates === true ? g.gatePenaltyMin : 0)) * 60;
 }
@@ -187,7 +205,7 @@ function search(g, from, to, query, mode) {
       for (const b of g.boards.get(stop) || []) {
         if (enabled && !enabled.has(lineMode(net, b.line))) continue;   // mode filter
         const p = net.lines[b.line].patterns[b.pi];
-        const hw = headwayAt(p, query.day, t0 + l.cost);
+        const hw = headwayForBoarding(p, b.i, query.day, t0 + l.cost);
         if (hw == null) continue;
         const wait = hw / 2, first = l.boardings === 0;
         relax(l, `p|${b.line}|${b.pi}|${b.i}`, stop, wait, { type: "board", line: b.line, pi: b.pi, i: b.i, wait, headway: hw },
@@ -339,4 +357,15 @@ export function blockedNearby(net, point, { maxDistM = DEFAULT_QUERY.maxWalkM, m
     if (dist <= maxDistM) out.push({ station: id, dist_m: dist, modes: MODES.filter((m) => stModes.has(m)) });
   }
   return out.sort((a, b) => a.dist_m - b.dist_m);
+}
+
+// Lines (from lineIds) that can't be boarded at clock time t on day: outside their service hours or
+// headway bands. With `atStops`, only boardings at those line-stops count (e.g. the origin station),
+// so "KLIA Transit not running" isn't hidden by the opposite direction still running.
+export function linesNotRunning(g, lineIds, query = DEFAULT_QUERY, atStops = null) {
+  const q = { ...DEFAULT_QUERY, ...query };
+  const t = parseTime(q.time);
+  const only = atStops ? new Set(atStops) : null;
+  return lineIds.filter((lid) => !g.net.lines[lid].patterns.some((p) =>
+    p.stops.slice(0, -1).some((s, i) => (!only || only.has(s)) && headwayForBoarding(p, i, q.day, t) != null)));
 }

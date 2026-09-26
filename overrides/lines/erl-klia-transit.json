@@ -1,35 +1,153 @@
 {
-  "id": "erl-klia-transit",
-  "name": "KLIA Transit",
-  "short": "KLIA Transit",
-  "color": null,
-  "sources": [
-    "https://www.kliaekspres.com/products-fares/klia-transit/ (retrieved 2026-09-26): KLIA T2-KL Sentral 39 min total; every 15 min weekday peak, 30 min weekday off-peak and weekends; first/last KL Sentral 05:03/00:03, KLIA T2 05:18/00:30",
-    "Station list: docs/reference/transit-map-2026-06.pdf (line 7); ERL calls Putrajaya Sentral 'Putrajaya & Cyberjaya'",
-    "Coordinates: KL Sentral = KTMB 19100, Bandar Tasik Selatan = KTMB 19600, Putrajaya Sentral = rapid PY41; others from Wikipedia (see stops)"
-  ],
-  "not_modelled": "Weekday 15-min peak: peak windows are not published on the source page, so weekdays use the 30-min off-peak headway.",
-  "stops": [
-    {"id": "kl_sentral", "name": "KL Sentral", "coord_from": "ktmb:19100"},
-    {"id": "bandar_tasik_selatan", "name": "Bandar Tasik Selatan", "coord_from": "ktmb:19600"},
-    {"id": "putrajaya_sentral", "name": "Putrajaya Sentral", "coord_from": "rapid:PY41"},
-    {"id": "salak_tinggi", "name": "Salak Tinggi", "lat": 2.82556, "lon": 101.71306,
-     "coord_source": "https://en.wikipedia.org/wiki/Salak_Tinggi_ERL_station (retrieved 2026-09-26)"},
-    {"id": "klia_t1", "name": "KLIA T1", "lat": 2.7550, "lon": 101.7049,
-     "coord_source": "https://en.wikipedia.org/wiki/KLIA_T1_ERL_station (retrieved 2026-09-26)"},
-    {"id": "klia_t2", "name": "KLIA T2", "lat": 2.74, "lon": 101.69,
-     "coord_source": "https://en.wikipedia.org/wiki/KLIA_T2_station (retrieved 2026-09-26; page gives 2 decimals only, ~1 km precision)"}
-  ],
-  "patterns": [
-    {"dir": 0, "stops": ["kl_sentral", "bandar_tasik_selatan", "putrajaya_sentral", "salak_tinggi", "klia_t1", "klia_t2"],
-     "run_sec": null,
-     "run_estimate": {"method": "distance_split", "total_sec": 2340},
-     "headways": {"weekday": [[18180, 86580, 1800]], "saturday": [[18180, 86580, 1800]], "sunday": [[18180, 86580, 1800]]},
-     "headway_source": "official"},
-    {"dir": 1, "stops": ["klia_t2", "klia_t1", "salak_tinggi", "putrajaya_sentral", "bandar_tasik_selatan", "kl_sentral"],
-     "run_sec": null,
-     "run_estimate": {"method": "distance_split", "total_sec": 2340},
-     "headways": {"weekday": [[19080, 88200, 1800]], "saturday": [[19080, 88200, 1800]], "sunday": [[19080, 88200, 1800]]},
-     "headway_source": "official"}
-  ]
+ "id": "erl-klia-transit",
+ "name": "KLIA Transit",
+ "short": "KLIA Transit",
+ "color": null,
+ "sources": [
+  "https://www.kliaekspres.com/products-fares/klia-transit/ (retrieved 2026-09-26): KLIA T2-KL Sentral 39 min total; every 15 min weekday peak, 30 min weekday off-peak and weekends; first/last KL Sentral 05:03/00:03, KLIA T2 05:18/00:30",
+  "https://www.kliaekspres.com/products-fares/concession-ticket/ (retrieved 2026-09-26): per-station first/last train times, both directions. Inter-station run times are the differences between consecutive stations (identical for first and last trains). Service hours = first/last departure from the origin terminus; after-midnight times written as 24:00+ (GTFS).",
+  "Station list: docs/reference/transit-map-2026-06.pdf (line 7); ERL calls Putrajaya Sentral 'Putrajaya & Cyberjaya'",
+  "Coordinates: KL Sentral = KTMB 19100, Bandar Tasik Selatan = KTMB 19600, Putrajaya Sentral = rapid PY41; others from Wikipedia (see stops)"
+ ],
+ "not_modelled": "Weekday 15-min peak: peak windows are not published, so weekdays use the 30-min off-peak headway.",
+ "stops": [
+  {
+   "id": "kl_sentral",
+   "name": "KL Sentral",
+   "coord_from": "ktmb:19100"
+  },
+  {
+   "id": "bandar_tasik_selatan",
+   "name": "Bandar Tasik Selatan",
+   "coord_from": "ktmb:19600"
+  },
+  {
+   "id": "putrajaya_sentral",
+   "name": "Putrajaya Sentral",
+   "coord_from": "rapid:PY41"
+  },
+  {
+   "id": "salak_tinggi",
+   "name": "Salak Tinggi",
+   "lat": 2.82556,
+   "lon": 101.71306,
+   "coord_source": "https://en.wikipedia.org/wiki/Salak_Tinggi_ERL_station (retrieved 2026-09-26)"
+  },
+  {
+   "id": "klia_t1",
+   "name": "KLIA T1",
+   "lat": 2.755,
+   "lon": 101.7049,
+   "coord_source": "https://en.wikipedia.org/wiki/KLIA_T1_ERL_station (retrieved 2026-09-26)"
+  },
+  {
+   "id": "klia_t2",
+   "name": "KLIA T2",
+   "lat": 2.74,
+   "lon": 101.69,
+   "coord_source": "https://en.wikipedia.org/wiki/KLIA_T2_station (retrieved 2026-09-26; page gives 2 decimals only, ~1 km precision)"
+  }
+ ],
+ "patterns": [
+  {
+   "dir": 0,
+   "stops": [
+    "kl_sentral",
+    "bandar_tasik_selatan",
+    "putrajaya_sentral",
+    "salak_tinggi",
+    "klia_t1",
+    "klia_t2"
+   ],
+   "run_sec": [
+    0,
+    420,
+    1140,
+    1740,
+    2160,
+    2340
+   ],
+   "headways": {
+    "weekday": [
+     [
+      18180,
+      86580,
+      1800
+     ]
+    ],
+    "saturday": [
+     [
+      18180,
+      86580,
+      1800
+     ]
+    ],
+    "sunday": [
+     [
+      18180,
+      86580,
+      1800
+     ]
+    ]
+   },
+   "headway_source": "official",
+   "run_source": "official",
+   "run_source_detail": "official (derived from first/last train times) https://www.kliaekspres.com/products-fares/concession-ticket/",
+   "service_hours": {
+    "first": "05:03",
+    "last": "24:03"
+   },
+   "service_hours_source": "https://www.kliaekspres.com/products-fares/concession-ticket/"
+  },
+  {
+   "dir": 1,
+   "stops": [
+    "klia_t2",
+    "klia_t1",
+    "salak_tinggi",
+    "putrajaya_sentral",
+    "bandar_tasik_selatan",
+    "kl_sentral"
+   ],
+   "run_sec": [
+    0,
+    240,
+    660,
+    1200,
+    1860,
+    2340
+   ],
+   "headways": {
+    "weekday": [
+     [
+      19080,
+      88200,
+      1800
+     ]
+    ],
+    "saturday": [
+     [
+      19080,
+      88200,
+      1800
+     ]
+    ],
+    "sunday": [
+     [
+      19080,
+      88200,
+      1800
+     ]
+    ]
+   },
+   "headway_source": "official",
+   "run_source": "official",
+   "run_source_detail": "official (derived from first/last train times) https://www.kliaekspres.com/products-fares/concession-ticket/",
+   "service_hours": {
+    "first": "05:18",
+    "last": "24:30"
+   },
+   "service_hours_source": "https://www.kliaekspres.com/products-fares/concession-ticket/"
+  }
+ ]
 }
