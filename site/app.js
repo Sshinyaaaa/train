@@ -24,10 +24,16 @@ const modeList = (ms) => MODES.filter((m) => ms.includes(m)).join(", ");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const color = (lid) => net.lines[lid].color || "#888";
 const lineLabel = (lid) => net.lines[lid].display.label;   // e.g. "12 · MRT Putrajaya Line"
-// Readable text on a line colour (yellow lines need dark text).
+// Badge text on an official line colour: white or near-black, whichever has the higher WCAG
+// contrast ratio (e.g. dark on Monorail green, white on Kelana Jaya red).
+function relLum(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * f(n >> 16) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+}
 function ink(hex) {
-  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-  return (0.299 * r + 0.587 * g + 0.114 * b) > 170 ? "#1c1c1c" : "#fff";
+  const L = relLum(hex);
+  return (1.05 / (L + 0.05)) >= ((L + 0.05) / (relLum("#1c1c1c") + 0.05)) ? "#fff" : "#1c1c1c";
 }
 const badge = (lid) => `<span class="badge" style="background:${color(lid)};color:${ink(color(lid))}" title="${esc(lineLabel(lid))}">${esc(net.lines[lid].display.number)}</span>`;
 const fmtMin = (m) => `${Math.round(m)} min`;
