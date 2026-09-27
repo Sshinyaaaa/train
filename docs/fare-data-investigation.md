@@ -228,6 +228,32 @@ Klang: RM0.80 and RM1.00 for the same pairs.
 whether KTMB fares have changed since. The files' `Last-Modified` of 31 Jul 2024 only says when they
 were uploaded.
 
+### KTMB: extraction and checks (2026-09-28)
+
+**T&C.** KTMB's Komuter T&C (April 2026),
+<https://www.ktmb.com.my/assets/pdf/2026/T&C%20Komuter%20April%202026.pdf>, states in its
+penalty-charges table: "Max Fare Klang Valley Sector – RM23.20" (Northern Sector: RM21.30).
+- **The 2015 cash table's highest in-scope fare is exactly RM23.20** (Tanjung Malim ↔ Pulau
+  Sebang/Tampin). Its overall highest is RM26.50 (Tanjung Malim ↔ Gemas, out of scope).
+- The T&C also gives concession discounts, e.g. 50% for registered disabled passengers on some
+  ticket media.
+
+**Extraction** (`scripts/extract_ktm_fares.py` → `overrides/fares/ktm.json`):
+- **Cash and concession:** `pdftotext -table` gives 57 rows × 57 values. Each row is placed by its
+  diagonal "–", and the station order was checked against the header image.
+  - **Cash:** symmetric, 1,485 in-scope pairs.
+  - **Concession:** one inconsistency in the source, Putra → Segambut RM1.10 vs Segambut → Putra
+    RM1.00. Both are recorded.
+- **Cashless** (image only): the grid was located from the table lines; every glyph matched one of
+  13 shapes (0–9, ".", "–", ".4"), each labelled by eye once.
+  - **Checks:** all 3,249 cells parsed; "–" only on the diagonal; fully symmetric; cashless ≤ cash for
+    every pair; 5 random cells re-checked by eye.
+  - **Status:** "transcribed, unverified".
+- **Spot checks for the KTMB app** (cash / cashless / concession):
+  - KL Sentral → Seremban: 8.70 / 7.40 / 4.40
+  - Batu Caves → Subang Jaya: 4.70 / 4.00 / 2.40
+  - Pelabuhan Klang → KL Sentral: 6.40 / 5.40 / 3.20
+
 ## Open questions for review
 
 1. **Rapid KL permission.** The fare API is undocumented, with no published terms, although it does

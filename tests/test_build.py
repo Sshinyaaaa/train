@@ -94,10 +94,10 @@ class Validation(unittest.TestCase):
 
     def test_fare_systems(self):
         net = tiny_net()
-        net["fares"] = {"systems": {"s": {"lines": ["x:L"], "table": {"pairs": [["a", "zz", 1.0]]}}}}
+        net["fares"] = {"systems": {"s": {"lines": ["x:L"], "table": {"ids": ["a", "zz"], "cents": [[None, 100], [100, None]]}}}}
         errs = self.errors(net)
         self.assertTrue(any("unknown stop zz" in e for e in errs))
-        net["fares"]["systems"]["s"]["table"]["pairs"] = [["a", "b", 0]]
+        net["fares"]["systems"]["s"]["table"] = {"ids": ["a", "b"], "cents": [[None, 0], [0, None]]}
         self.assertTrue(any("bad price" in e for e in self.errors(net)))
         net["fares"]["systems"] = {}
         self.assertTrue(any("in 0 fare systems" in e for e in self.errors(net)))
@@ -151,8 +151,10 @@ class RealFeeds(unittest.TestCase):
         self.assertEqual(t[0]["run_sec"], [0, 420, 1140, 1740, 2160, 2340])
         self.assertEqual(t[1]["run_sec"], [0, 240, 660, 1200, 1860, 2340])
         self.assertEqual(t[0]["run_source"], "official")
-        self.assertEqual(t[0]["service_hours"], [5 * 3600 + 3 * 60, 24 * 3600 + 3 * 60])     # 05:03-24:03
-        self.assertEqual(t[1]["service_hours"], [5 * 3600 + 18 * 60, 24 * 3600 + 30 * 60])   # 05:18-24:30
+        # ERL timetable effective 21 Mar 2026: last trains 00:00 from KL Sentral, 01:00 from KLIA T2
+        self.assertEqual(t[0]["service_hours"], [5 * 3600 + 3 * 60, 24 * 3600])               # 05:03-24:00
+        self.assertEqual(t[1]["service_hours"], [5 * 3600 + 18 * 60, 25 * 3600])              # 05:18-25:00
+        self.assertIn("effective 21 Mar 2026", t[0]["headway_source_detail"])
         self.assertFalse(any("erl-klia-transit: run times are estimated" in w for w in self.warnings))
 
 

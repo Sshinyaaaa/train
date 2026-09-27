@@ -50,15 +50,27 @@ retrieved 2026-09-26. Each line file cites its sources.
   - KL Sentral → KLIA T2: 7, 12, 10, 7, 3 min.
   - KLIA T2 → KL Sentral: 4, 7, 9, 11, 8 min.
   - First and last trains give identical gaps.
-- **Transit service hours**, from the same table: KL Sentral 05:03–24:03 and KLIA T2 05:18–24:30,
-  in GTFS 24:00+ notation.
+- **Transit headways and service hours** are **derived from ERL's timetable effective 21 Mar 2026**:
+  <https://www.kliaekspres.com/media/rojb45mf/kt-train-schedule_effective-21-mar-2026.pdf>.
+  - `scripts/derive_erl_headways.py` reads the PDF (in `data/raw/erl/`, gitignored) and classes each
+    gap between departures as 15, 20 or 30 min.
+  - **Weekday, from KL Sentral:** 15 min 07:03–09:03 and 17:03–20:03, 20 min 23:00–24:00, 30 min
+    otherwise.
+  - **Weekday, from KLIA T2:** 15 min 06:18–08:46 and 16:48–19:46, 20 min 22:55–23:55, 30 min
+    otherwise.
+  - **Weekends:** 30 min, with the same late-night 20 min.
+  - **Last trains** per the PDF: 00:00 from KL Sentral and 01:00 from KLIA T2, written 24:00 and
+    25:00. These supersede the website's 00:03 and 00:30.
+  - The PDF doesn't state "peak windows" in words. These are its departure pattern, which differs
+    from the 06:00–09:00 / 16:00–22:00 claimed by a third-party site.
 - **Station coordinates:** KL Sentral uses KTMB `19100`, BTS uses KTMB `19600`, and Putrajaya
   Sentral uses rapid `PY41`. Salak Tinggi, KLIA T1 and KLIA T2 come from their Wikipedia pages.
   KLIA T2 is given to 2 decimal places only, about 1 km precision.
 - **Not modelled:**
   - Ekspres all-stop running after 23:00.
-  - Transit's 15-min weekday peak. The peak hours aren't published, so weekdays use the
-    30-min headway.
+  - Transit's 05:00 Salak Tinggi → KLIA T2 early train. Service hours are one window per
+    direction from the first station.
+  - Public holidays: ERL runs the weekend timetable, but the planner has no holiday calendar.
 
 ## 1. Repo layout
 
@@ -380,7 +392,7 @@ systems, an unknown stop in a fare table, or a non-positive price.
 |---|---|---|
 | ERL (both lines) | `overrides/fares/erl.json`: adult one-way standard fares from ERL's fare tables, with the source URL and `retrieved` date (2026-09-28) | Priced |
 | Rapid KL | No fare data: permission requested from Prasarana. No bulk collection, no live API calls | Segments link "Check fare on MyRapid" to the official calculator |
-| KTM Komuter | 2015 fare PDFs downloaded to `data/raw/ktmb-fares/` | Under owner review; not used |
+| KTM Komuter | `overrides/fares/ktm.json` from KTMB's fare tables **effective 2 Dec 2015**, by `scripts/extract_ktm_fares.py`. **Cash** extracted from the PDF text layer and used as the price. **Cashless** transcribed from the image, shown alongside and marked "unverified". Concession stored, not shown | Displayed with "KTMB fare table effective 2 Dec 2015, may be outdated" until the owner confirms. Abdullah Hukum and Kajang 2 are missing, so "fare unavailable" |
 
 - **KLIA Transit:** 15 station pairs, symmetric.
 - **KLIA Ekspres:** KL Sentral ↔ KLIA T1/T2 only. ERL publishes no Ekspres fare for T1 ↔ T2, so that
@@ -586,8 +598,11 @@ fallback. To update it, rebuild locally and commit.
    - **M4.2 – fares:** ERL fares, operator links for Rapid KL and KTM (§4d). Next: Rapid KL once
      permission comes, and KTM after review of the 2015 tables.
 6. **M6 – route alternatives:** up to 5 distinct routes, sortable (§4f).
-6. **M5 – timetable-aware KTM:** real departures (next train after arrival) instead of headway / 2,
-   respecting `calendar_dates`.
+6. **M5 – timetable-aware KTM and KLIA Transit:** real departures (next train after arrival)
+   instead of headway / 2, respecting `calendar_dates`.
+   - KLIA Transit uses its full ERL timetable (effective 21 Mar 2026, already parsed by
+     `derive_erl_headways.py`), built with the same machinery as KTM.
+   - That also covers the 05:00 Salak Tinggi train and ERL's public-holiday timetable.
 7. **Later / optional:**
    - Skypark line
    - Ekspres all-stop after 23:00

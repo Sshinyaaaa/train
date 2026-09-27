@@ -4,12 +4,13 @@
  "short": "KLIA Transit",
  "color": null,
  "sources": [
+  "https://www.kliaekspres.com/media/rojb45mf/kt-train-schedule_effective-21-mar-2026.pdf (retrieved 2026-09-28): KLIA Transit service schedule effective 21 March 2026, weekday and weekend/public-holiday departures for every station. Headway bands and service hours are derived from its departures by scripts/derive_erl_headways.py: consecutive gaps of <=17 min -> 15 min, <=22 min -> 20 min, else 30 min.",
   "https://www.kliaekspres.com/products-fares/klia-transit/ (retrieved 2026-09-26): KLIA T2-KL Sentral 39 min total; every 15 min weekday peak, 30 min weekday off-peak and weekends; first/last KL Sentral 05:03/00:03, KLIA T2 05:18/00:30",
   "https://www.kliaekspres.com/products-fares/concession-ticket/ (retrieved 2026-09-26): per-station first/last train times, both directions. Inter-station run times are the differences between consecutive stations (identical for first and last trains). Service hours = first/last departure from the origin terminus; after-midnight times written as 24:00+ (GTFS).",
   "Station list: docs/reference/transit-map-2026-06.pdf (line 7); ERL calls Putrajaya Sentral 'Putrajaya & Cyberjaya'",
   "Coordinates: KL Sentral = KTMB 19100, Bandar Tasik Selatan = KTMB 19600, Putrajaya Sentral = rapid PY41; others from Wikipedia (see stops)"
  ],
- "not_modelled": "Weekday 15-min peak: peak windows are not published, so weekdays use the 30-min off-peak headway.",
+ "not_modelled": "The 05:00 Salak Tinggi -> KLIA T2 early train (05:07 KLIA T1, 05:10 KLIA T2) is not modelled: service hours are one window per direction from the first station. Public holidays use the weekend timetable per ERL, but the planner has no holiday calendar, so weekdays always use the weekday bands. Run times use the first train's times; individual trains vary by up to a minute per segment.",
  "stops": [
   {
    "id": "kl_sentral",
@@ -71,22 +72,57 @@
     "weekday": [
      [
       18180,
-      86580,
+      25380,
       1800
+     ],
+     [
+      25380,
+      32580,
+      900
+     ],
+     [
+      32580,
+      61380,
+      1800
+     ],
+     [
+      61380,
+      72180,
+      900
+     ],
+     [
+      72180,
+      82800,
+      1800
+     ],
+     [
+      82800,
+      86400,
+      1200
      ]
     ],
     "saturday": [
      [
       18180,
-      86580,
+      82800,
       1800
+     ],
+     [
+      82800,
+      86400,
+      1200
      ]
     ],
     "sunday": [
      [
       18180,
-      86580,
+      82800,
       1800
+     ],
+     [
+      82800,
+      86400,
+      1200
      ]
     ]
    },
@@ -95,9 +131,10 @@
    "run_source_detail": "official (derived from first/last train times) https://www.kliaekspres.com/products-fares/concession-ticket/",
    "service_hours": {
     "first": "05:03",
-    "last": "24:03"
+    "last": "24:00"
    },
-   "service_hours_source": "https://www.kliaekspres.com/products-fares/concession-ticket/"
+   "service_hours_source": "derived from ERL timetable effective 21 Mar 2026 (https://www.kliaekspres.com/media/rojb45mf/kt-train-schedule_effective-21-mar-2026.pdf)",
+   "headway_source_detail": "derived from ERL timetable effective 21 Mar 2026 (https://www.kliaekspres.com/media/rojb45mf/kt-train-schedule_effective-21-mar-2026.pdf)"
   },
   {
    "dir": 1,
@@ -121,21 +158,86 @@
     "weekday": [
      [
       19080,
-      88200,
+      22680,
+      1800
+     ],
+     [
+      22680,
+      31560,
+      900
+     ],
+     [
+      31560,
+      60480,
+      1800
+     ],
+     [
+      60480,
+      71160,
+      900
+     ],
+     [
+      71160,
+      82080,
+      1800
+     ],
+     [
+      82080,
+      82500,
+      900
+     ],
+     [
+      82500,
+      86100,
+      1200
+     ],
+     [
+      86100,
+      90000,
       1800
      ]
     ],
     "saturday": [
      [
       19080,
-      88200,
+      82080,
+      1800
+     ],
+     [
+      82080,
+      82500,
+      900
+     ],
+     [
+      82500,
+      86100,
+      1200
+     ],
+     [
+      86100,
+      90000,
       1800
      ]
     ],
     "sunday": [
      [
       19080,
-      88200,
+      82080,
+      1800
+     ],
+     [
+      82080,
+      82500,
+      900
+     ],
+     [
+      82500,
+      86100,
+      1200
+     ],
+     [
+      86100,
+      90000,
       1800
      ]
     ]
@@ -145,9 +247,10 @@
    "run_source_detail": "official (derived from first/last train times) https://www.kliaekspres.com/products-fares/concession-ticket/",
    "service_hours": {
     "first": "05:18",
-    "last": "24:30"
+    "last": "25:00"
    },
-   "service_hours_source": "https://www.kliaekspres.com/products-fares/concession-ticket/"
+   "service_hours_source": "derived from ERL timetable effective 21 Mar 2026 (https://www.kliaekspres.com/media/rojb45mf/kt-train-schedule_effective-21-mar-2026.pdf)",
+   "headway_source_detail": "derived from ERL timetable effective 21 Mar 2026 (https://www.kliaekspres.com/media/rojb45mf/kt-train-schedule_effective-21-mar-2026.pdf)"
   }
  ]
 }

@@ -25,7 +25,11 @@
    ],
    "fare_url": "https://www.ktmb.com.my/komuter.html",
    "link_text": "KTM Komuter fares",
-   "status": "fare tables under review (not used)"
+   "table": "ktm.json#cash",
+   "secondary_table": "ktm.json#cashless",
+   "secondary_label": "cashless",
+   "source_label": "KTMB (ktmb.com.my)",
+   "caveat": "KTMB fare table effective 2 Dec 2015, may be outdated"
   },
   "erl-klia-transit": {
    "name": "KLIA Transit",

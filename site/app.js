@@ -392,7 +392,8 @@ function fareHtml(r) {
   const segs = f.segments.map((s) => {
     const where = `${esc(stopName(s.from))} → ${esc(stopName(s.to))}`;
     const link = s.fare_url ? `<a href="${esc(s.fare_url)}" target="_blank" rel="noopener">${esc(s.link_text)}</a>` : "";
-    const value = s.price != null ? `<strong>RM ${s.price.toFixed(2)}</strong>`
+    const value = s.price != null ? `<strong>RM ${s.price.toFixed(2)}</strong>${s.secondary
+        ? `<br><span class="meta">${esc(s.secondary.label)} RM ${s.secondary.price.toFixed(2)}${s.secondary.status ? ` (${esc(s.secondary.status)})` : ""}</span>` : ""}`
       : s.system === "rapidkl" ? link : `fare unavailable${link ? ` · ${link}` : ""}`;
     return `<li><span>${esc(s.name)}: ${where}</span> <span class="fare-val">${value}</span></li>`;
   }).join("");
@@ -401,7 +402,9 @@ function fareHtml(r) {
     <div class="fare-total">Fare: <strong>${total ? esc(total) : "unavailable"}</strong></div>
     ${f.added_together ? `<div class="meta">Fares from each operator, added together (adult, one-way).</div>` : `<div class="meta">Adult, one-way.</div>`}
     <ul class="fare-segs">${segs}</ul>
-    ${f.sources.map((x) => `<div class="meta">Fares as of ${esc(fmtDate(x.as_of))}, source: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></div>`).join("")}
+    ${f.sources.map((x) => x.caveat
+      ? `<div class="meta fare-caveat">${esc(x.caveat)}. Source: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></div>`
+      : `<div class="meta">Fares as of ${esc(fmtDate(x.as_of))}, source: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></div>`).join("")}
     ${notes.length ? `<details class="stops"><summary>Concessions and other fares</summary>${notes.map((t) => `<p>${esc(t)}</p>`).join("")}</details>` : ""}
   </div>`;
 }
@@ -481,7 +484,7 @@ function render() {
         `<button type="button" data-sort="${k}" aria-pressed="${sortBy === k}">${t}</button>`).join("")}
     </div>
     <p class="filters-note">${items.length} route${items.length > 1 ? "s" : ""}${sortBy === "cheapest" && items.some((x) => !x.f?.complete)
-      ? " · only published fares (ERL) can be compared; Rapid KL and KTM fares are not included" : ""}</p>` : "";
+      ? " · Rapid KL fares aren't available yet, so routes using Rapid KL are ranked by their other fares only" : ""}</p>` : "";
   out.innerHTML = note + sorter + items.map((x, i) => routeCard(x.r, res, x.f, i === 0, i + 1)).join("");
   out.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { sortBy = b.dataset.sort; render(); }));
   wireResultButtons(out);

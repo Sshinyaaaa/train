@@ -69,14 +69,19 @@ def validate(net, today=None):
                 owner[lid].append(sid)
                 if lid not in lines:
                     errors.append(f"fare system {sid}: unknown line {lid}")
-            tb = sysd.get("table")
-            if tb:
-                for a, b, price in tb["pairs"]:
-                    for s in (a, b):
-                        if not any(f"{lid}:{s}" in stops for lid in sysd["lines"]):
-                            errors.append(f"fare system {sid}: unknown stop {s}")
-                    if not (isinstance(price, (int, float)) and price > 0):
-                        errors.append(f"fare system {sid}: bad price {price!r} for {a}-{b}")
+            local = {s.rsplit(":", 1)[1] for lid in sysd["lines"] if lid in lines
+                     for p in lines[lid]["patterns"] for s in p["stops"]}
+            for field in ("table", "secondary_table"):
+                tb = sysd.get(field)
+                if not tb:
+                    continue
+                for s in tb["ids"]:
+                    if s not in local:
+                        errors.append(f"fare system {sid}: unknown stop {s}")
+                for i, row in enumerate(tb["cents"]):
+                    for j, c in enumerate(row):
+                        if i != j and c is not None and not (isinstance(c, int) and c > 0):
+                            errors.append(f"fare system {sid}: bad price {c!r} for {tb['ids'][i]}-{tb['ids'][j]}")
         for lid in lines:
             if len(owner.get(lid, [])) != 1:
                 errors.append(f"{lid}: in {len(owner.get(lid, []))} fare systems (expected 1)")

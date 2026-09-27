@@ -186,8 +186,9 @@ def load_manual_lines(line_stops):
             pat = {"dir": p["dir"], "stops": [f"{lid}:{s}" for s in p["stops"]], "run_sec": run,
                    "run_source": run_src, "headways": p.get("headways") or {},
                    "headway_source": p.get("headway_source", "official")}
-            if p.get("run_source_detail"):
-                pat["run_source_detail"] = p["run_source_detail"]
+            for k in ("run_source_detail", "headway_source_detail"):
+                if p.get(k):
+                    pat[k] = p[k]
             if p.get("service_hours"):
                 # first/last departure from the pattern's first stop; GTFS 24:00+ for after midnight
                 sh = p["service_hours"]
@@ -263,6 +264,25 @@ def apply_pattern_overrides(lines, notes):
                      f"(times mirrored from opposite direction, estimated)")
 
 
+def _compact_table(src, key):
+    """A fare table as station ids + a symmetric matrix in sen (int), for a small network.json."""
+    tb = src["tables"][key]
+    ids = sorted({x for a, b, _ in ([p["a"], p["b"], p["adult"]] if isinstance(p, dict) else p for p in tb["pairs"]) for x in (a, b)})
+    idx = {x: i for i, x in enumerate(ids)}
+    cents = [[None] * len(ids) for _ in ids]
+    for p in tb["pairs"]:
+        a, b, price = (p["a"], p["b"], p["adult"]) if isinstance(p, dict) else p
+        cents[idx[a]][idx[b]] = cents[idx[b]][idx[a]] = round(price * 100)
+    out = {"ids": ids, "cents": cents, "source": tb["source"], "retrieved": src["retrieved"], "currency": src["currency"],
+           "fare_type": src.get("fare_type"), "symmetric": True}
+    for k in ("note", "status"):
+        if tb.get(k):
+            out[k] = tb[k]
+    if src.get("effective"):
+        out["effective"] = src["effective"]
+    return out
+
+
 def load_fares():
     """overrides/fares: fare systems per line and published fare tables (PLAN.md §4d)."""
     d = OVERRIDES / "fares"
@@ -272,15 +292,14 @@ def load_fares():
     systems = {}
     for sid, sysd in ops["systems"].items():
         sysd = dict(sysd)
-        ref = sysd.pop("table", None)
-        if ref:
-            fname, key = ref.split("#")
-            src = json.loads((d / fname).read_text(encoding="utf-8"))
-            tb = src["tables"][key]
-            sysd["table"] = {"retrieved": src["retrieved"], "currency": src["currency"], "fare_type": src["fare_type"],
-                             "source": tb["source"], "note": tb.get("note"), "symmetric": src.get("symmetric", True),
-                             "pairs": [[p["a"], p["b"], p["adult"]] for p in tb["pairs"]]}
-            sysd["notes"] = src.get("notes", [])
+        for field in ("table", "secondary_table"):
+            ref = sysd.pop(field, None)
+            if ref:
+                fname, key = ref.split("#")
+                src = json.loads((d / fname).read_text(encoding="utf-8"))
+                sysd[field] = _compact_table(src, key)
+                if field == "table":
+                    sysd["notes"] = src.get("notes", [])
         systems[sid] = sysd
     return {"systems": systems}
 

@@ -14,14 +14,19 @@ estimated in the build warnings and in route output. A manual value always repla
 3. **Fare-gate flags**: `exits_gates` is unset on all 70 transfers, and unset counts as no penalty.
    Set `true`/`false`: `overrides/transfers.json`. The penalty is 5 min; change it in
    `scripts/build_network.py` `CONFIG["gate_penalty_min"]`.
-4. **KLIA Transit peak hours (optional)**: run times and service hours are now official. Only the
-   weekday peak hours for the 15-min headway are unknown; weekdays use 30 min. If you find them, add
-   a weekday headway band in `overrides/lines/erl-klia-transit.json` and cite the source in
-   `sources`.
+4. **KLIA Transit**: done. Headways and last trains now come from ERL's timetable, effective
+   21 Mar 2026. Check it again if ERL publishes a newer schedule.
 5. **Known routes**: write `tests/known-routes.json` (format in PLAN.md §6).
 6. **Rapid KL fares**: waiting on Prasarana's reply about permission. Until then, Rapid KL segments
    link to the official calculator.
-7. **KTM fares**: review `docs/fare-data-investigation.md` ("KTMB PDFs: contents"). The tables are
-   dated 2 Dec 2015, and Abdullah Hukum and Kajang 2 are missing. Decide whether to use them.
+7. **KTM fares**: check these against the KTMB app, then tell me to drop the "may be outdated"
+   caveat, or to replace the table. Figures are from the 2015 tables, cash / cashless:
+   - KL Sentral → Seremban: RM8.70 / RM7.40
+   - Batu Caves → Subang Jaya: RM4.70 / RM4.00
+   - Pelabuhan Klang → KL Sentral: RM6.40 / RM5.40
+
+   The cashless figures were transcribed from an image. The table's maximum (Tanjung Malim ↔ Tampin,
+   RM23.20) matches the T&C's April 2026 Klang Valley maximum fare. Abdullah Hukum and Kajang 2 are
+   not in the table.
 
 Deferred: the Skypark line (PLAN.md §0).

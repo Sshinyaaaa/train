@@ -244,6 +244,7 @@ details.stops summary { cursor: pointer; }
 .fare-val { white-space: nowrap; }
 .fare .meta { color: var(--muted); font-size: .8rem; }
 .fare details p { margin: 4px 0; }
+.fare .fare-caveat { color: var(--warn-text); }
 
 /* ---- place map, directions links, route alternatives ------------------------------------ */
 .placemap { margin-top: 6px; }

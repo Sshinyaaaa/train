@@ -47,12 +47,37 @@ test("consecutive Rapid KL legs are one segment; cross-operator totals read 'fro
   assert.equal(fareSummary(f), "from RM 8.00 + Rapid KL fare");
 });
 
-test("KTM segments are unavailable (tables under review); KTM 1 -> KTM 2 is one segment", () => {
+test("KTM fares from KTMB's 2015 table: cash price, cashless alongside (unverified), with the 2015 caveat", () => {
+  const f = computeFares(net, { legs: [ride("ktmb:KC05_KB18", "ktmb:19100", "ktmb:22700")] });   // KL Sentral -> Seremban
+  assert.equal(fareSummary(f), "RM 8.70");
+  const s = f.segments[0];
+  assert.equal(s.secondary.label, "cashless");
+  assert.equal(s.secondary.price, 7.4);
+  assert.equal(s.secondary.status, "transcribed from image, unverified");
+  assert.equal(f.sources[0].caveat, "KTMB fare table effective 2 Dec 2015, may be outdated");
+  assert.equal(f.sources[0].as_of, "2015-12-02");
+});
+
+test("KTM 1 -> KTM 2 is one segment priced end to end (Batu Caves -> Subang Jaya RM4.70)", () => {
   const f = computeFares(net, { legs: [ride("ktmb:KC05_KB18", "ktmb:50600", "ktmb:19100"), ride("ktmb:KA15_KD19", "ktmb:19100", "ktmb:53700")] });
   assert.equal(f.segments.length, 1);
-  assert.equal(f.segments[0].name, "KTM Komuter");
-  assert.equal(f.complete, false);
-  assert.deepEqual(f.missing_names, ["KTM Komuter"]);
+  assert.equal(fareSummary(f), "RM 4.70");
+});
+
+test("Abdullah Hukum and Kajang 2 are not in the 2015 table: fare unavailable + KTMB link", () => {
+  for (const to of ["ktmb:52700", "ktmb:20402"]) {
+    const f = computeFares(net, { legs: [ride("ktmb:KC05_KB18", "ktmb:19100", to)] });
+    assert.equal(f.complete, false);
+    assert.equal(f.segments[0].price, null);
+    assert.equal(f.segments[0].fare_url, "https://www.ktmb.com.my/komuter.html");
+  }
+});
+
+test("highest in-scope KTM cash fare equals the T&C (Apr 2026) Klang Valley maximum, RM23.20", () => {
+  const f = computeFares(net, { legs: [ride("ktmb:KC05_KB18", "ktmb:15200", "ktmb:25100")] });   // Tanjung Malim -> Tampin
+  assert.equal(f.known_total, 23.2);
+  const t = net.fares.systems.ktmb.table;
+  assert.equal(Math.max(...t.cents.flat().filter((c) => c != null)), 2320);
 });
 
 test("real route: KL Sentral -> Putrajaya Sentral (ERL) prices from the router's legs", () => {
