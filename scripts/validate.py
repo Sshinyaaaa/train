@@ -60,6 +60,27 @@ def validate(net, today=None):
         if not line.get("color"):
             errors.append(f"{lid}: no colour")
 
+    # fares: every line in exactly one fare system; table stops exist on that system's line
+    fares = net.get("fares")
+    if fares:
+        owner = defaultdict(list)
+        for sid, sysd in fares["systems"].items():
+            for lid in sysd["lines"]:
+                owner[lid].append(sid)
+                if lid not in lines:
+                    errors.append(f"fare system {sid}: unknown line {lid}")
+            tb = sysd.get("table")
+            if tb:
+                for a, b, price in tb["pairs"]:
+                    for s in (a, b):
+                        if not any(f"{lid}:{s}" in stops for lid in sysd["lines"]):
+                            errors.append(f"fare system {sid}: unknown stop {s}")
+                    if not (isinstance(price, (int, float)) and price > 0):
+                        errors.append(f"fare system {sid}: bad price {price!r} for {a}-{b}")
+        for lid in lines:
+            if len(owner.get(lid, [])) != 1:
+                errors.append(f"{lid}: in {len(owner.get(lid, []))} fare systems (expected 1)")
+
     # KTMB scope
     for lid in lines:
         if lid.startswith("ktmb:") and lid not in KTMB_ALLOWED:

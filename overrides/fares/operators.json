@@ -1,0 +1,51 @@
+{
+ "_note": "Fare systems: a ride leg belongs to the fare system of its line. Consecutive legs in the same system are one fare segment. Different systems are priced separately and added together.",
+ "systems": {
+  "rapidkl": {
+   "name": "Rapid KL",
+   "lines": [
+    "rapid:AG",
+    "rapid:PH",
+    "rapid:KJ",
+    "rapid:MR",
+    "rapid:KGL",
+    "rapid:PYL",
+    "rapid:SA",
+    "rapid:BRT"
+   ],
+   "fare_url": "https://myrapid.com.my/bus-train/rapid-kl/integrated-fare-table/",
+   "link_text": "Check fare on MyRapid",
+   "status": "pending permission (no fare data used)"
+  },
+  "ktmb": {
+   "name": "KTM Komuter",
+   "lines": [
+    "ktmb:KC05_KB18",
+    "ktmb:KA15_KD19"
+   ],
+   "fare_url": "https://www.ktmb.com.my/komuter.html",
+   "link_text": "KTM Komuter fares",
+   "status": "fare tables under review (not used)"
+  },
+  "erl-klia-transit": {
+   "name": "KLIA Transit",
+   "lines": [
+    "erl-klia-transit"
+   ],
+   "fare_url": "https://www.kliaekspres.com/products-fares/klia-transit/",
+   "link_text": "KLIA Transit fares",
+   "table": "erl.json#erl-klia-transit",
+   "source_label": "ERL (kliaekspres.com)"
+  },
+  "erl-klia-ekspres": {
+   "name": "KLIA Ekspres",
+   "lines": [
+    "erl-klia-ekspres"
+   ],
+   "fare_url": "https://www.kliaekspres.com/products-fares/klia-ekspres/",
+   "link_text": "KLIA Ekspres fares",
+   "table": "erl.json#erl-klia-ekspres",
+   "source_label": "ERL (kliaekspres.com)"
+  }
+ }
+}

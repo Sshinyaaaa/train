@@ -263,6 +263,28 @@ def apply_pattern_overrides(lines, notes):
                      f"(times mirrored from opposite direction, estimated)")
 
 
+def load_fares():
+    """overrides/fares: fare systems per line and published fare tables (PLAN.md §4d)."""
+    d = OVERRIDES / "fares"
+    if not (d / "operators.json").exists():
+        return None
+    ops = json.loads((d / "operators.json").read_text(encoding="utf-8"))
+    systems = {}
+    for sid, sysd in ops["systems"].items():
+        sysd = dict(sysd)
+        ref = sysd.pop("table", None)
+        if ref:
+            fname, key = ref.split("#")
+            src = json.loads((d / fname).read_text(encoding="utf-8"))
+            tb = src["tables"][key]
+            sysd["table"] = {"retrieved": src["retrieved"], "currency": src["currency"], "fare_type": src["fare_type"],
+                             "source": tb["source"], "note": tb.get("note"), "symmetric": src.get("symmetric", True),
+                             "pairs": [[p["a"], p["b"], p["adult"]] for p in tb["pairs"]]}
+            sysd["notes"] = src.get("notes", [])
+        systems[sid] = sysd
+    return {"systems": systems}
+
+
 def group_stations(line_stops, transfers):
     parent = {s: s for s in line_stops}
 
@@ -322,6 +344,9 @@ def build(today):
                  "notes": notes + ktm_notes + manual_notes},
         "stations": stations, "stops": stops, "lines": lines, "transfers": transfers,
     }
+    fares = load_fares()
+    if fares:
+        net["fares"] = fares
     return net
 
 

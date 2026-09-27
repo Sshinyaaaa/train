@@ -19,5 +19,9 @@ estimated in the build warnings and in route output. A manual value always repla
    a weekday headway band in `overrides/lines/erl-klia-transit.json` and cite the source in
    `sources`.
 5. **Known routes**: write `tests/known-routes.json` (format in PLAN.md §6).
+6. **Rapid KL fares**: waiting on Prasarana's reply about permission. Until then, Rapid KL segments
+   link to the official calculator.
+7. **KTM fares**: review `docs/fare-data-investigation.md` ("KTMB PDFs: contents"). The tables are
+   dated 2 Dec 2015, and Abdullah Hukum and Kajang 2 are missing. Decide whether to use them.
 
 Deferred: the Skypark line (PLAN.md §0).

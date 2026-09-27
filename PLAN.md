@@ -69,6 +69,8 @@ overrides/
   transfers.json              all transfers (no transfers.txt in either feed)
   patterns.json               feed-gap fixes: stops inserted into a GTFS pattern
   display.json                map number + full name per line
+  fares/operators.json        fare system per line, operator fare links
+  fares/erl.json              ERL fare tables (source URL, retrieved date)
   lines/erl-klia-ekspres.json
   lines/erl-klia-transit.json
 scripts/
@@ -78,7 +80,7 @@ scripts/
   seed_transfers.py           one-off: reviewed draft table -> overrides/transfers.json
   audit_gtfs.py, audit_interchanges.py, inspect_pattern.py   (read-only reports)
 site/
-  index.html, app.js, style.css, router.js
+  index.html, app.js, style.css, router.js, fares.js, theme.js
   data/network.json           committed; last good build
 tests/
   test_build.py               python -m unittest discover -s tests
@@ -355,6 +357,45 @@ A place is `{type: "place", lat, lon, name}`.
   storage is unavailable or the data is invalid, the defaults apply.
 - When the filters aren't the defaults, results show "Filters active · Reset filters".
 
+## 4d. Fares
+
+**Fare systems.** `overrides/fares/operators.json` puts every line in exactly one fare system:
+- `rapidkl`: the 8 Rapid KL lines
+- `ktmb`: the 2 KTM Komuter lines
+- `erl-klia-transit` and `erl-klia-ekspres`: separate systems, because ERL says their tickets aren't
+  interchangeable
+
+The build embeds this into `network.json` under `fares`, and validation errors on a line in 0 or 2+
+systems, an unknown stop in a fare table, or a non-positive price.
+
+**Segments.**
+- Consecutive ride legs in the same system form one fare segment. This covers Rapid KL paid-area
+  transfers and KTM 1 ↔ KTM 2.
+- Different systems are priced separately and **added together**, labelled "Fares from each
+  operator, added together".
+
+**Data per system:**
+
+| System | Source | Status |
+|---|---|---|
+| ERL (both lines) | `overrides/fares/erl.json`: adult one-way standard fares from ERL's fare tables, with the source URL and `retrieved` date (2026-09-28) | Priced |
+| Rapid KL | No fare data: permission requested from Prasarana. No bulk collection, no live API calls | Segments link "Check fare on MyRapid" to the official calculator |
+| KTM Komuter | 2015 fare PDFs downloaded to `data/raw/ktmb-fares/` | Under owner review; not used |
+
+- **KLIA Transit:** 15 station pairs, symmetric.
+- **KLIA Ekspres:** KL Sentral ↔ KLIA T1/T2 only. ERL publishes no Ekspres fare for T1 ↔ T2, so that
+  segment is unavailable.
+- **Concession fares** are shown only as text notes from ERL's pages, never calculated.
+
+**Display** (`site/fares.js` → the route card):
+- **Total:**
+  - "RM X" when every segment is priced.
+  - "from RM X + [operator] fare" when some are.
+  - "unavailable" when none are.
+- **Segment rows:** each shows its price, or "fare unavailable" plus the operator's fare link (for
+  Rapid KL, "Check fare on MyRapid").
+- **Sources:** a "Fares as of [date], source: [operator]" line for each fare source used.
+
 ## 5. Validation checks (`scripts/validate.py`, run by the build)
 
 Errors: the build writes nothing, and CI doesn't deploy. Warnings: stored in `meta.warnings`,
@@ -476,6 +517,8 @@ fallback. To update it, rebuild locally and commit.
 5. **M4 – places — DONE:** search from and to a place or the current location, with access legs
    (§4b).
    - **M4.1 – filters:** mode chips, max walk, no-route mode suggestions (§4c).
+   - **M4.2 – fares:** ERL fares, operator links for Rapid KL and KTM (§4d). Next: Rapid KL once
+     permission comes, and KTM after review of the 2015 tables.
 6. **M5 – timetable-aware KTM:** real departures (next train after arrival) instead of headway / 2,
    respecting `calendar_dates`.
 7. **Later / optional:**

@@ -1,3 +1,4 @@
+import { computeFares, fareSummary } from "./fares.js";
 import { loadNetwork, route, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
@@ -309,6 +310,31 @@ function journeyHtml(r) {
   return `<ol class="journey">${rows.join("")}</ol>`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtDate = (iso) => { const [y, m, d] = iso.split("-").map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; };
+
+// Fare block (PLAN.md §4d): per-operator segments, added together; unknown segments link out.
+function fareHtml(r) {
+  const f = computeFares(net, r);
+  if (!f || !f.segments.length) return "";
+  const total = fareSummary(f);
+  const segs = f.segments.map((s) => {
+    const where = `${esc(stopName(s.from))} → ${esc(stopName(s.to))}`;
+    const link = s.fare_url ? `<a href="${esc(s.fare_url)}" target="_blank" rel="noopener">${esc(s.link_text)}</a>` : "";
+    const value = s.price != null ? `<strong>RM ${s.price.toFixed(2)}</strong>`
+      : s.system === "rapidkl" ? link : `fare unavailable${link ? ` · ${link}` : ""}`;
+    return `<li><span>${esc(s.name)}: ${where}</span> <span class="fare-val">${value}</span></li>`;
+  }).join("");
+  const notes = [...new Set(f.segments.flatMap((s) => (net.fares.systems[s.system]?.notes || []).map((n) => n.text)))];
+  return `<div class="fare">
+    <div class="fare-total">Fare: <strong>${total ? esc(total) : "unavailable"}</strong></div>
+    ${f.added_together ? `<div class="meta">Fares from each operator, added together (adult, one-way).</div>` : `<div class="meta">Adult, one-way.</div>`}
+    <ul class="fare-segs">${segs}</ul>
+    ${f.sources.map((x) => `<div class="meta">Fares as of ${esc(fmtDate(x.as_of))}, source: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></div>`).join("")}
+    ${notes.length ? `<details class="stops"><summary>Concessions and other fares</summary>${notes.map((t) => `<p>${esc(t)}</p>`).join("")}</details>` : ""}
+  </div>`;
+}
+
 function routeCard(r, res) {
   const lines = [...new Set(r.lines)];
   const changes = r.transfers === 0 ? "direct" : `${r.transfers} change${r.transfers === 1 ? "" : "s"}`;
@@ -321,6 +347,7 @@ function routeCard(r, res) {
       <div class="meta">Expected ~${fmtMin(r.expected_min)} with an average first wait</div>
       ${r.excludes_far_access ? `<div class="meta">Times exclude getting to or from a station beyond your ${fmtDist(filters.maxWalkM)} max walk.</div>` : ""}
     </div>
+    ${fareHtml(r)}
     ${walkAlt}
     ${journeyHtml(r)}
     ${r.uses_estimate ? `<div class="note">This route uses estimated values (marked above). Times may differ from the real service.</div>` : ""}

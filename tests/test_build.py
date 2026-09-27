@@ -92,6 +92,16 @@ class Validation(unittest.TestCase):
         net["lines"]["x:L"]["patterns"][0]["service_hours"] = [80000, 70000]
         self.assertTrue(any("bad service_hours" in e for e in self.errors(net)))
 
+    def test_fare_systems(self):
+        net = tiny_net()
+        net["fares"] = {"systems": {"s": {"lines": ["x:L"], "table": {"pairs": [["a", "zz", 1.0]]}}}}
+        errs = self.errors(net)
+        self.assertTrue(any("unknown stop zz" in e for e in errs))
+        net["fares"]["systems"]["s"]["table"]["pairs"] = [["a", "b", 0]]
+        self.assertTrue(any("bad price" in e for e in self.errors(net)))
+        net["fares"]["systems"] = {}
+        self.assertTrue(any("in 0 fare systems" in e for e in self.errors(net)))
+
     def test_out_of_scope_ktmb_line(self):
         net = tiny_net()
         net["lines"]["ktmb:ETS"] = {"color": "#000", "display": {"number": "x", "name": "x", "mode": "KTM"}, "patterns": []}

@@ -1,0 +1,119 @@
+{
+ "operator": "ERL (Express Rail Link)",
+ "retrieved": "2026-09-28",
+ "currency": "MYR",
+ "fare_type": "Adult one-way standard ticket, as published in ERL's fare tables. ERL states online purchases get 10% off; that discount is not applied here.",
+ "symmetric": true,
+ "tables": {
+  "erl-klia-transit": {
+   "source": "https://www.kliaekspres.com/products-fares/klia-transit/",
+   "pairs": [
+    {
+     "a": "kl_sentral",
+     "b": "bandar_tasik_selatan",
+     "adult": 6.5
+    },
+    {
+     "a": "kl_sentral",
+     "b": "putrajaya_sentral",
+     "adult": 14.0
+    },
+    {
+     "a": "bandar_tasik_selatan",
+     "b": "putrajaya_sentral",
+     "adult": 8.0
+    },
+    {
+     "a": "kl_sentral",
+     "b": "salak_tinggi",
+     "adult": 18.3
+    },
+    {
+     "a": "bandar_tasik_selatan",
+     "b": "salak_tinggi",
+     "adult": 12.4
+    },
+    {
+     "a": "putrajaya_sentral",
+     "b": "salak_tinggi",
+     "adult": 4.7
+    },
+    {
+     "a": "kl_sentral",
+     "b": "klia_t1",
+     "adult": 55.0
+    },
+    {
+     "a": "bandar_tasik_selatan",
+     "b": "klia_t1",
+     "adult": 38.4
+    },
+    {
+     "a": "putrajaya_sentral",
+     "b": "klia_t1",
+     "adult": 9.4
+    },
+    {
+     "a": "salak_tinggi",
+     "b": "klia_t1",
+     "adult": 4.9
+    },
+    {
+     "a": "kl_sentral",
+     "b": "klia_t2",
+     "adult": 55.0
+    },
+    {
+     "a": "bandar_tasik_selatan",
+     "b": "klia_t2",
+     "adult": 38.4
+    },
+    {
+     "a": "putrajaya_sentral",
+     "b": "klia_t2",
+     "adult": 9.4
+    },
+    {
+     "a": "salak_tinggi",
+     "b": "klia_t2",
+     "adult": 4.9
+    },
+    {
+     "a": "klia_t1",
+     "b": "klia_t2",
+     "adult": 2.0
+    }
+   ]
+  },
+  "erl-klia-ekspres": {
+   "source": "https://www.kliaekspres.com/products-fares/klia-ekspres/",
+   "pairs": [
+    {
+     "a": "kl_sentral",
+     "b": "klia_t1",
+     "adult": 55.0
+    },
+    {
+     "a": "kl_sentral",
+     "b": "klia_t2",
+     "adult": 55.0
+    }
+   ],
+   "note": "ERL publishes KLIA Ekspres fares for KL Sentral - KLIA (T1 & T2) only; there is no Ekspres fare for KLIA T1 - KLIA T2."
+  }
+ },
+ "notes": [
+  {
+   "text": "KLIA Transit concessions (Malaysian senior citizens 60+, registered disabled persons, students 16+ and in higher learning): one-way fare less 30%, all sectors. Airline crew, airport staff and licensed tourist guides: RM35 one-way KL Sentral - KLIA (T1 & T2), RM30 one-way Bandar Tasik Selatan - KLIA (T1 & T2). Registration required.",
+   "source": "https://www.kliaekspres.com/products-fares/concession-ticket/"
+  },
+  {
+   "text": "KLIA Ekspres: children 6-15 RM25 single; children under 6 free (max 3 per adult). No published concession fare; ERL asks disabled/senior passengers to write in.",
+   "source": "https://www.kliaekspres.com/products-fares/klia-ekspres/"
+  },
+  {
+   "text": "KLIA Ekspres and KLIA Transit tickets are not interchangeable (different ticketing systems).",
+   "source": "https://www.kliaekspres.com/products-fares/klia-ekspres/"
+  }
+ ]
+}
