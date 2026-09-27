@@ -146,6 +146,10 @@ def validate(net, today=None):
     est = [t for t in net["transfers"] if t.get("walk_source") == "estimated"]
     if est:
         warnings.append(f"{len(est)} of {len(net['transfers'])} transfers use an estimated walk_min")
+    for t in net["transfers"]:
+        if t.get("routed_rejected_m") is not None:
+            warnings.append(f"transfer {t['from']} - {t['to']}: OSM-routed walk {t['routed_rejected_m']} m is implausible "
+                            f"vs {t['dist_m']} m straight line, using the estimate (check the stop coordinates in OSM)")
     unset = sum(t["exits_gates"] is None for t in net["transfers"])
     if unset:
         warnings.append(f"{unset} transfers have exits_gates unset (treated as no gate penalty)")

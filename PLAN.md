@@ -181,6 +181,21 @@ How the fields are built:
   "walk_min": null, "exits_gates": null, "note": "draft #25" }
 ```
 - `kind` is `interchange` (the map draws the same station) or `connecting` (a grey link on the map).
+- **Real walking distances for transfers:** `scripts/route_transfer_walks.py` asks the FOSSGIS OSRM
+  foot profile for every pair and saves the result to `overrides/transfer-walks.json` (committed),
+  with the date and the coordinates used.
+  - **Manual only:** it refuses to run when `CI`/`GITHUB_ACTIONS` is set.
+  - **Rate:** one tiny request per pair, ≥ 1.1 s apart, with a User-Agent that identifies the project.
+  - **Incremental:** only new pairs, or pairs whose stop coordinates changed, are queried.
+  - **Build:** walk time = routed distance ÷ 75 m/min + the kind's overhead, marked
+    `"walk_source": "osm-routed"`. A routed entry is used only if its coordinates still match.
+  - **Sanity guards:**
+    - A routed distance shorter than the straight line (OSRM snapping) is raised to the
+      straight-line distance.
+    - A routed distance longer than max(4 × straight line, straight line + 1 km) is rejected. The
+      transfer keeps the estimate and validation warns (e.g. Sungai Besi SP16↔PY29 routed as
+      27.6 km for 39 m).
+  - **Order: manual > osm-routed > estimated.**
 - **walk_min:** a number here is **manual and always wins**. If it's `null`, the build estimates it:
   `ceil(straight-line m × 1.4 ÷ 75 m/min + overhead)`, where 75 m/min is 4.5 km/h and the overhead
   is 1 min for interchange and 2 min for connecting. The result is marked
@@ -416,9 +431,13 @@ systems, an unknown stop in a fare table, or a non-positive price.
   **1,211 m** real walk (~16 min). For Plaza Rakyat, 280 m straight is a 1,313 m walk.
 
 **Walking routes (OSRM foot, FOSSGIS `routing.openstreetmap.de`):**
-- **Scope:** only first and last walks from a **typed place**.
-  - Current location keeps the straight-line estimate, because the page promises it never leaves
-    the browser.
+- **Scope:** first and last walks from a **typed place**.
+  - **Current location only with an opt-in toggle**, off by default: "Use real walking route (sends
+    your location to the OpenStreetMap routing service)".
+    - The choice is remembered in `localStorage` (`klrail.geoWalk`).
+    - The toggle only appears when walking routes are enabled.
+    - Turning it off drops routed walks for the current location.
+    - `walkAllowed()` in `walk.js` holds the rule.
   - Station-to-station transfer walks are unchanged.
 - **Request:** after a place is picked, **one `table` request per end** (place → the line-stops of
   its ≤ 4 candidate stations), `annotations=distance`. Walk time = OSM walking distance ÷ 75 m/min,

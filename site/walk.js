@@ -3,6 +3,12 @@
 // least `osrmMinIntervalMs` apart, cached for the session, with a timeout. Any failure returns
 // null, and the router then falls back to the straight-line estimate ("estimated walk").
 
+// Which endpoints may be sent to the walking service: typed places always; the current location only
+// if the user has opted in ("Use real walking route", off by default).
+export function walkAllowed(ep, { geoOptIn = false } = {}) {
+  return Boolean(ep && ep.type === "place" && (!ep.geo || geoOptIn));
+}
+
 // Cache survives reloads within the tab (sessionStorage); after HTTP 429 the service is left alone
 // for `osrmBackoffMs` (estimates are used meanwhile).
 const STORE_KEY = "klrail.walks";

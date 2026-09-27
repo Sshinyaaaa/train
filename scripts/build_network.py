@@ -12,6 +12,7 @@ import sys
 from collections import Counter, defaultdict
 
 from gtfs_util import RAW, ROOT, haversine_m, read, to_secs
+from route_transfer_walks import coords_key, pair_key
 from validate import validate
 
 CONFIG = {
@@ -202,15 +203,41 @@ def load_manual_lines(line_stops):
     return lines, notes
 
 
-def load_transfers(line_stops):
+def routed_walk_min(dist_m, kind, walk=CONFIG["walk"]):
+    """Walk time from a real (OSM-routed) distance: no detour factor, same overhead as estimates."""
+    minutes = dist_m / (walk["speed_kmh"] * 1000 / 60) + walk["overhead_min"][kind]
+    return math.ceil(round(minutes, 6))
+
+
+def routed_plausible(routed_m, straight_m):
+    """Reject routed walks far longer than the straight line: usually OSRM snapped a stop onto a
+    disconnected path (e.g. 27.6 km for a 39 m same-station change at Sungai Besi)."""
+    return routed_m <= max(4 * straight_m, straight_m + 1000)
+
+
+def load_transfers(line_stops, routed=None):
+    """Walk time per transfer: manual value > OSM-routed distance (overrides/transfer-walks.json,
+    written manually by route_transfer_walks.py) > straight-line estimate."""
+    if routed is None:
+        f = OVERRIDES / "transfer-walks.json"
+        routed = json.loads(f.read_text(encoding="utf-8")).get("walks", {}) if f.exists() else {}
     out = []
     for t in json.loads((OVERRIDES / "transfers.json").read_text(encoding="utf-8")):
         row = {"from": t["from"], "to": t["to"], "kind": t["kind"], "walk_min": t.get("walk_min"),
                "walk_source": "manual", "exits_gates": t.get("exits_gates"), "note": t.get("note", "")}
         a, b = line_stops.get(t["from"]), line_stops.get(t["to"])
-        if row["walk_min"] is None and a and b:  # manual values always win; estimate only gaps
-            dist = haversine_m((a["lat"], a["lon"]), (b["lat"], b["lon"]))
-            row["walk_min"], row["walk_source"], row["dist_m"] = estimate_walk_min(dist, t["kind"]), "estimated", round(dist)
+        if row["walk_min"] is None and a and b:  # manual values always win
+            r = routed.get(pair_key(t["from"], t["to"]))
+            straight = haversine_m((a["lat"], a["lon"]), (b["lat"], b["lon"]))
+            if r and r.get("coords") == coords_key(a, b, t["from"], t["to"]) and routed_plausible(r["dist_m"], straight):
+                # a walk can't be shorter than the straight line (shorter = OSRM snapping), so floor it there
+                dist = max(r["dist_m"], straight)
+                row["walk_min"], row["walk_source"] = routed_walk_min(dist, t["kind"]), "osm-routed"
+                row["dist_m"], row["routed"] = round(dist), r.get("routed")
+            else:
+                row["walk_min"], row["walk_source"], row["dist_m"] = estimate_walk_min(straight, t["kind"]), "estimated", round(straight)
+                if r and r.get("coords") == coords_key(a, b, t["from"], t["to"]):
+                    row["routed_rejected_m"] = round(r["dist_m"])   # validate.py warns
         out.append(row)
     return out
 
@@ -382,7 +409,7 @@ def stats(net):
         "edges": {"ride": ride, "board": board, "alight": alight, "transfer": 2 * len(net["transfers"]),
                   "total": ride + board + alight + 2 * len(net["transfers"])},
         "transfers": {"total": len(net["transfers"]), "manual_walk": src.get("manual", 0),
-                      "estimated_walk": src.get("estimated", 0),
+                      "osm_routed_walk": src.get("osm-routed", 0), "estimated_walk": src.get("estimated", 0),
                       "by_kind": dict(Counter(t["kind"] for t in net["transfers"])),
                       "exits_gates_unset": sum(t["exits_gates"] is None for t in net["transfers"])},
         "estimated_run_patterns": sum(p["run_source"] == "estimated" for p in pats),

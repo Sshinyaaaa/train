@@ -32,10 +32,14 @@ test("transfer waits count in journey_min", () => {
   assert.ok(Math.abs(r.journey_min - sum) < 0.3, `${r.journey_min} vs ${sum}`);
 });
 
-test("estimate flags: KLIA Transit run times and estimated walks are flagged", () => {
-  const r = route(g, "st:erl-klia-ekspres:klia_t2", "st:rapid:PY41").fastest;
+test("estimate flags: an estimated transfer walk is flagged; OSM-routed ones are not", () => {
+  // Sungai Besi SP16 -> PY29 stays estimated (its routed walk was rejected as implausible)
+  const r = route(g, "st:rapid:SP15", "st:rapid:PY28").fastest;
   assert.ok(r.uses_estimate);
-  assert.ok(r.flags.includes("estimated_run") || r.flags.includes("estimated_walk"));
+  assert.ok(r.flags.includes("estimated_walk"));
+  const t = route(g, "st:erl-klia-ekspres:klia_t2", "st:rapid:PY41").fastest;
+  assert.ok(t.legs.filter((l) => l.type === "transfer").every((l) => l.walk_source === "osm-routed"));
+  assert.ok(!t.flags.includes("estimated_walk"));
 });
 
 test("KTM line change at a shared stop has no walk", () => {

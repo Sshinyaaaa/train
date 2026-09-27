@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadNetwork, route, alternatives, accessCandidates, routeSignature } from "../site/router.js";
-import { createWalkService } from "../site/walk.js";
+import { createWalkService, walkAllowed } from "../site/walk.js";
 
 const net = JSON.parse(readFileSync(new URL("../site/data/network.json", import.meta.url), "utf8"));
 const g = loadNetwork(net);
@@ -127,4 +127,13 @@ test("shared-track twins (Ampang vs Sri Petaling between the same stations) are 
   const alts = alternatives(g, PASAR_SENI, GMBB);
   const twins = alts.filter((r) => r.lines.join(">") === "rapid:KJ>rapid:AG" || r.lines.join(">") === "rapid:KJ>rapid:PH");
   assert.ok(twins.length <= 1, alts.map((r) => r.lines.join(">")).join(" | "));
+});
+
+test("walkAllowed: typed places yes; current location only with the opt-in; stations never", () => {
+  assert.equal(walkAllowed(GMBB), true);
+  const here = { type: "place", lat: 3.1, lon: 101.7, name: "Current location", geo: true };
+  assert.equal(walkAllowed(here), false);                       // off by default
+  assert.equal(walkAllowed(here, { geoOptIn: true }), true);
+  assert.equal(walkAllowed({ type: "station", id: "st:rapid:KJ1" }, { geoOptIn: true }), false);
+  assert.equal(walkAllowed(null), false);
 });

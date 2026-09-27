@@ -1,6 +1,6 @@
 import { computeFares, fareSummary } from "./fares.js";
 import { CONFIG } from "./config.js";
-import { createWalkService } from "./walk.js";
+import { createWalkService, walkAllowed } from "./walk.js";
 import { loadNetwork, route, alternatives, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
@@ -19,6 +19,9 @@ let net, graph, stations = [];
 const picked = { from: null, to: null };
 let sortBy = "fastest";   // fastest | fewest | cheapest (PLAN.md §4f)
 const walkService = createWalkService(CONFIG);
+// Opt-in (off by default): send the current location to the walking-route service. Remembered locally.
+let geoWalkOptIn = false;
+try { geoWalkOptIn = localStorage.getItem("klrail.geoWalk") === "1"; } catch {}
 // Route filters (PLAN.md §4c): enabled modes + max first/last walk. Persisted per browser.
 const DEFAULT_FILTERS = { modes: [...MODES], maxWalkM: DEFAULT_QUERY.maxWalkM };
 let filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] };
@@ -251,10 +254,10 @@ function setPicked(role, ep) {
 // --- After a pick: place map + real walking distances (PLAN.md §4e) -----------------------------
 function afterPick(role) { updatePlaceMap(role); ensureWalks(role); }
 
-// Typed places only: current location is never sent to the walking service.
+// Typed places always; current location only with the opt-in toggle.
 async function ensureWalks(role) {
   const ep = picked[role];
-  if (!ep || ep.type !== "place" || ep.geo || !walkService.enabled()) return;
+  if (!walkAllowed(ep, { geoOptIn: geoWalkOptIn }) || !walkService.enabled()) return;
   const cands = accessCandidates(net, ep, { modes: filters.modes, maxDistM: filters.maxWalkM });
   const stops = cands.flatMap((c) => c.stops.map((x) => ({ id: x.stop, lat: net.stops[x.stop].lat, lon: net.stops[x.stop].lon })))
     .filter((x) => !ep.walks?.[x.id]);
@@ -422,7 +425,7 @@ function routeCard(r, res, f, open, rank) {
   const changes = r.transfers === 0 ? "direct" : `${r.transfers} change${r.transfers === 1 ? "" : "s"}`;
   const walkAlt = res.direct_walk_min != null && res.direct_walk_min < r.expected_min
     ? `<div class="note ok">Walking directly may be quicker: ~${fmtMin(res.direct_walk_min)}.</div>` : "";
-  const osm = r.legs.some((l) => l.walk_source === "osm");
+  const osm = r.legs.some((l) => l.walk_source === "osm" || l.walk_source === "osm-routed");
   const fs = fareShort(f);
   return `<details class="card alt"${open ? " open" : ""}>
     <summary class="summary">
@@ -530,6 +533,22 @@ function drawFilters() {
 }
 function applyFilters() { saveFilters(); drawFilters(); render(); ensureWalks("from"); ensureWalks("to"); }
 function resetFilters() { filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] }; applyFilters(); }
+function setupGeoWalkToggle() {
+  const box = $("geowalk"), row = $("geowalk-row");
+  if (!walkService.enabled()) { row.hidden = true; return; }   // nothing to opt into
+  row.hidden = false;
+  box.checked = geoWalkOptIn;
+  box.addEventListener("change", () => {
+    geoWalkOptIn = box.checked;
+    try { localStorage.setItem("klrail.geoWalk", geoWalkOptIn ? "1" : "0"); } catch {}
+    for (const role of ["from", "to"]) {
+      const ep = picked[role];
+      if (ep?.geo) { if (geoWalkOptIn) ensureWalks(role); else { delete ep.walks; } }
+    }
+    render();
+  });
+}
+
 function setupFilters() {
   loadFilters();
   $("modes").addEventListener("click", (e) => {
@@ -581,6 +600,7 @@ async function main() {
     setPicked("from", t); setPicked("to", f); save(); render();
   });
   setupFilters();
+  setupGeoWalkToggle();
   $("day").addEventListener("change", render);
   $("time").addEventListener("change", render);
   showBanner();

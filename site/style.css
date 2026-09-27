@@ -193,6 +193,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .chip[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; font-size: .82rem; color: var(--muted); }
 .filter-row select { width: auto; min-height: 44px; padding: 2px 6px; }
+.optin { align-items: flex-start; gap: 8px; }
+.optin input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
 .linkbtn { font: inherit; font-size: .82rem; background: none; border: 0; padding: 4px 0; color: var(--link); text-decoration: underline; cursor: pointer; }
 .filters-note { font-size: .82rem; color: var(--muted); margin: 0 0 8px; }
 .msg .linkbtn { font-size: inherit; }

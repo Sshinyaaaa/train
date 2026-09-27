@@ -3,6 +3,7 @@
 Real-feed tests are skipped when data/raw/ is absent (it is gitignored).
 """
 import datetime as dt
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -156,6 +157,63 @@ class RealFeeds(unittest.TestCase):
         self.assertEqual(t[1]["service_hours"], [5 * 3600 + 18 * 60, 25 * 3600])              # 05:18-25:00
         self.assertIn("effective 21 Mar 2026", t[0]["headway_source_detail"])
         self.assertFalse(any("erl-klia-transit: run times are estimated" in w for w in self.warnings))
+
+
+class TransferWalkSources(unittest.TestCase):
+    """manual walk_min > OSM-routed distance (only if routed for the same coordinates) > estimate."""
+
+    def run_with(self, transfers, routed):
+        stops = {"a": {"lat": 3.0, "lon": 101.0}, "b": {"lat": 3.001, "lon": 101.0}}   # ~111 m apart
+        orig = bn.OVERRIDES
+        tmp = Path(__file__).resolve().parent / "_tmp_overrides2"
+        try:
+            tmp.mkdir(exist_ok=True)
+            (tmp / "transfers.json").write_text(json.dumps(transfers), encoding="utf-8")
+            bn.OVERRIDES = tmp
+            return bn.load_transfers(stops, routed=routed), stops
+        finally:
+            bn.OVERRIDES = orig
+            (tmp / "transfers.json").unlink(missing_ok=True)
+            tmp.rmdir()
+
+    def test_routed_used_when_coords_match(self):
+        t = [{"from": "a", "to": "b", "kind": "connecting", "walk_min": None, "exits_gates": None}]
+        stops = {"a": {"lat": 3.0, "lon": 101.0}, "b": {"lat": 3.001, "lon": 101.0}}
+        routed = {bn.pair_key("a", "b"): {"dist_m": 600.0, "coords": bn.coords_key(stops["a"], stops["b"], "a", "b"), "routed": "2026-09-28"}}
+        (row,), _ = self.run_with(t, routed)
+        self.assertEqual(row["walk_source"], "osm-routed")
+        self.assertEqual(row["dist_m"], 600)
+        self.assertEqual(row["walk_min"], 10)          # 600 m / 75 m/min = 8 + 2 min connecting overhead
+
+    def test_stale_coords_fall_back_to_estimate(self):
+        t = [{"from": "a", "to": "b", "kind": "connecting", "walk_min": None, "exits_gates": None}]
+        routed = {bn.pair_key("a", "b"): {"dist_m": 600.0, "coords": [3.1, 101.1, 3.2, 101.2], "routed": "2026-09-28"}}
+        (row,), _ = self.run_with(t, routed)
+        self.assertEqual(row["walk_source"], "estimated")
+
+    def test_manual_beats_routed(self):
+        t = [{"from": "a", "to": "b", "kind": "connecting", "walk_min": 3, "exits_gates": False}]
+        stops = {"a": {"lat": 3.0, "lon": 101.0}, "b": {"lat": 3.001, "lon": 101.0}}
+        routed = {bn.pair_key("a", "b"): {"dist_m": 600.0, "coords": bn.coords_key(stops["a"], stops["b"], "a", "b")}}
+        (row,), _ = self.run_with(t, routed)
+        self.assertEqual((row["walk_min"], row["walk_source"]), (3, "manual"))
+
+    def routed_row(self, dist_m):
+        t = [{"from": "a", "to": "b", "kind": "connecting", "walk_min": None, "exits_gates": None}]
+        stops = {"a": {"lat": 3.0, "lon": 101.0}, "b": {"lat": 3.001, "lon": 101.0}}
+        routed = {bn.pair_key("a", "b"): {"dist_m": dist_m, "coords": bn.coords_key(stops["a"], stops["b"], "a", "b")}}
+        (row,), _ = self.run_with(t, routed)
+        return row
+
+    def test_implausible_routed_walk_rejected(self):
+        row = self.routed_row(27645.0)                 # Sungai Besi case: OSRM snapped to a disconnected path
+        self.assertEqual(row["walk_source"], "estimated")
+        self.assertEqual(row["routed_rejected_m"], 27645)
+
+    def test_routed_shorter_than_straight_line_is_floored(self):
+        row = self.routed_row(50.0)                    # ~111 m straight line
+        self.assertEqual(row["walk_source"], "osm-routed")
+        self.assertEqual(row["dist_m"], 111)
 
 
 class ManualOverrideWins(unittest.TestCase):
