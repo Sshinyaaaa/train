@@ -35,6 +35,7 @@
         <input id="from" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="from-list" aria-autocomplete="list">
         <ul id="from-list" class="suggest" role="listbox" hidden></ul>
         <p id="from-msg" class="pick-msg" role="status" hidden></p>
+        <div id="from-map" class="placemap" hidden></div>
       </div>
       <button type="button" id="swap" class="swap" aria-label="Swap origin and destination">⇅</button>
       <div class="picker" data-role="to">
@@ -42,6 +43,7 @@
         <input id="to" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="to-list" aria-autocomplete="list">
         <ul id="to-list" class="suggest" role="listbox" hidden></ul>
         <p id="to-msg" class="pick-msg" role="status" hidden></p>
+        <div id="to-map" class="placemap" hidden></div>
       </div>
     </div>
     <div class="when">
@@ -75,7 +77,9 @@
 
 <footer>
   <p>Waits are estimated from average train frequency, not live timetables. Data: Prasarana rapid-rail-kl and KTMB GTFS static feeds; KLIA Ekspres / KLIA Transit from ERL's published figures.</p>
-  <p>Place search by <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Only the text you type is sent to Photon; your current location stays in your browser.</p>
+  <p>Place search by <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a>; place maps, and walking routes (when enabled) by <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">FOSSGIS OSRM</a>. Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (<a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">ODbL</a>) · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">report a map error</a>.</p>
+  <p>Privacy: only the text you type goes to Photon, and a typed place's coordinates go to the walking-route and map services. Your current location stays in your browser, unless you tap "Open walking directions", which opens Google Maps with that walk's start and end.</p>
+  <p id="contact" hidden></p>
 </footer>
 
 <script type="module" src="app.js"></script>

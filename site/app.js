@@ -1,5 +1,7 @@
 import { computeFares, fareSummary } from "./fares.js";
-import { loadNetwork, route, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
+import { CONFIG } from "./config.js";
+import { createWalkService } from "./walk.js";
+import { loadNetwork, route, alternatives, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
 const PHOTON = "https://photon.komoot.io/api/";
@@ -15,7 +17,8 @@ const $ = (id) => document.getElementById(id);
 let net, graph, stations = [];
 // Endpoint per role: {type: "station", id} | {type: "place", lat, lon, name, geo?: true}
 const picked = { from: null, to: null };
-let tab = "fastest";
+let sortBy = "fastest";   // fastest | fewest | cheapest (PLAN.md §4f)
+const walkService = createWalkService(CONFIG);
 // Route filters (PLAN.md §4c): enabled modes + max first/last walk. Persisted per browser.
 const DEFAULT_FILTERS = { modes: [...MODES], maxWalkM: DEFAULT_QUERY.maxWalkM };
 let filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] };
@@ -169,7 +172,7 @@ function setupPicker(role) {
     if (it.kind === "station") picked[role] = { type: "station", id: it.s.id };
     else picked[role] = { type: "place", lat: it.p.lat, lon: it.p.lon, name: it.p.where ? `${it.p.main}, ${it.p.where}` : it.p.main };
     input.value = endpointLabel(picked[role]);
-    close(); save(); render();
+    close(); save(); render(); afterPick(role);
   };
 
   // Current location: requested only on tap; coordinates stay in this page (not stored or sent).
@@ -181,7 +184,7 @@ function setupPicker(role) {
       (pos) => {
         picked[role] = { type: "place", lat: pos.coords.latitude, lon: pos.coords.longitude, name: "Current location", geo: true };
         input.value = "Current location";
-        save(); render();
+        save(); render(); afterPick(role);
       },
       (err) => {
         picked[role] = null;
@@ -216,7 +219,8 @@ function setupPicker(role) {
   };
 
   input.addEventListener("input", () => {
-    picked[role] = null; showMsg("");
+    if (picked[role]) { picked[role] = null; updatePlaceMap(role); }
+    showMsg("");
     scheduleGeocode();
     userMoved = false;
     compose(); active = defaultActive(); draw(); render();
@@ -241,6 +245,61 @@ function setupPicker(role) {
 function setPicked(role, ep) {
   picked[role] = ep;
   $(role).value = endpointLabel(ep);
+  afterPick(role);
+}
+
+// --- After a pick: place map + real walking distances (PLAN.md §4e) -----------------------------
+function afterPick(role) { updatePlaceMap(role); ensureWalks(role); }
+
+// Typed places only: current location is never sent to the walking service.
+async function ensureWalks(role) {
+  const ep = picked[role];
+  if (!ep || ep.type !== "place" || ep.geo || !walkService.enabled()) return;
+  const cands = accessCandidates(net, ep, { modes: filters.modes, maxDistM: filters.maxWalkM });
+  const stops = cands.flatMap((c) => c.stops.map((x) => ({ id: x.stop, lat: net.stops[x.stop].lat, lon: net.stops[x.stop].lon })))
+    .filter((x) => !ep.walks?.[x.id]);
+  if (!stops.length) return;
+  const walks = await walkService.walksFrom(ep, stops);
+  if (walks && picked[role] === ep) { ep.walks = { ...(ep.walks || {}), ...walks }; render(); }
+}
+
+let leafletLoading = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  if (!leafletLoading) {
+    leafletLoading = new Promise((resolve, reject) => {
+      const css = document.createElement("link");
+      css.rel = "stylesheet"; css.href = CONFIG.leafletCss; css.crossOrigin = "anonymous";
+      document.head.appendChild(css);
+      const js = document.createElement("script");
+      js.src = CONFIG.leafletJs; js.crossOrigin = "anonymous";
+      js.onload = () => resolve(window.L); js.onerror = () => { leafletLoading = null; reject(new Error("leaflet")); };
+      document.head.appendChild(js);
+    });
+  }
+  return leafletLoading;
+}
+
+// Place confirmation: a small OSM map with a pin. Not for current location (tiles would reveal it).
+const placeMaps = {};
+async function updatePlaceMap(role) {
+  const box = $(`${role}-map`), ep = picked[role];
+  if (placeMaps[role]) { placeMaps[role].remove(); placeMaps[role] = null; }
+  if (!ep || ep.type !== "place" || ep.geo) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="placemap-name">${esc(ep.name)} <span class="meta">· check the pin is the right place</span></div>
+    <div class="placemap-map" role="img" aria-label="Map showing ${esc(ep.name)}"></div>`;
+  try {
+    const L = await loadLeaflet();
+    if (picked[role] !== ep) return;
+    const m = L.map(box.querySelector(".placemap-map"), { scrollWheelZoom: false }).setView([ep.lat, ep.lon], 16);
+    L.tileLayer(CONFIG.tileUrl, { maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(m);
+    L.circleMarker([ep.lat, ep.lon], { radius: 8, color: "#7c1d35", weight: 3, fillColor: "#f0c35a", fillOpacity: 1 }).addTo(m);
+    placeMaps[role] = m;
+  } catch {
+    box.querySelector(".placemap-map").textContent = "Map unavailable.";
+  }
 }
 
 // --- Results ------------------------------------------------------------------------------------
@@ -266,6 +325,18 @@ function blockedHint(leg, point) {
     <button type="button" class="linkbtn" data-enable-modes="${b.modes.join(",")}">Turn on ${esc(ms)}</button></div>`;
 }
 
+// Plain Google Maps directions URL (no key). Nothing is sent until the user taps it.
+function dirLink(a, b) {
+  if (!a || !b) return "";
+  const pt = (p) => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
+  return `<a class="dirlink" href="https://www.google.com/maps/dir/?api=1&amp;origin=${pt(a)}&amp;destination=${pt(b)}&amp;travelmode=walking" target="_blank" rel="noopener noreferrer">Open walking directions</a>`;
+}
+
+const OSM_WALK_ATTR = `Walking routes: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors
+  (<a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">ODbL</a>), routed by
+  <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">FOSSGIS OSRM</a> ·
+  <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">report a map error</a>`;
+
 function journeyHtml(r) {
   const rows = [];
   const node = (c, st, detail) => rows.push(`<li class="stop"><div class="rail" style="--c:${c}"><span class="node"></span></div>
@@ -278,12 +349,12 @@ function journeyHtml(r) {
       node(W, esc(leg.place), "Start");
       seg(W, true, leg.far
         ? `<span class="far">${esc(farAccess(leg.dist_m, stopName(leg.stop)))}</span>`
-        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(stopName(leg.stop))}`,
+        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(stopName(leg.stop))} ${estTags(leg.flags)}<br>${dirLink(leg.place_point, net.stops[leg.stop])}`,
         blockedHint(leg, picked.from));
     } else if (leg.type === "egress") {
       seg(W, true, leg.far
         ? `<span class="far">${esc(farEgress(leg.dist_m, stopName(leg.stop), leg.place))}</span>`
-        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(leg.place)}`,
+        : `Walk ${fmtDist(leg.dist_m)} (~${fmtMin(leg.walk_min)}) to ${esc(leg.place)} ${estTags(leg.flags)}<br>${dirLink(net.stops[leg.stop], leg.place_point)}`,
         blockedHint(leg, picked.to));
       node(W, esc(leg.place), "Arrive");
     } else if (leg.type === "ride") {
@@ -303,7 +374,7 @@ function journeyHtml(r) {
     } else {
       if (i === 0) node(W, esc(stopName(leg.from)), `Start · ${esc(stopLines(leg.from))}`);
       const gates = leg.exits_gates === true ? ` · exits fare gates (+${leg.gate_penalty_min} min)` : "";
-      seg(W, true, `Walk ~${fmtMin(leg.walk_min)} to ${esc(stopName(leg.to))} (${esc(stopLines(leg.to))})${gates} ${estTags(leg.flags)}`);
+      seg(W, true, `Walk ~${fmtMin(leg.walk_min)} to ${esc(stopName(leg.to))} (${esc(stopLines(leg.to))})${gates} ${estTags(leg.flags)}<br>${dirLink(net.stops[leg.from], net.stops[leg.to])}`);
       if (i === r.legs.length - 1) node(W, esc(stopName(leg.to)), "Arrive");
     }
   });
@@ -335,23 +406,35 @@ function fareHtml(r) {
   </div>`;
 }
 
-function routeCard(r, res) {
+// Short fare text for a card summary.
+function fareShort(f) {
+  if (!f || !f.segments.length) return "";
+  const s = fareSummary(f);
+  if (s) return s;
+  return f.missing_names.length === 1 && f.missing_names[0] === "Rapid KL" ? "check MyRapid" : "unavailable";
+}
+
+function routeCard(r, res, f, open, rank) {
   const lines = [...new Set(r.lines)];
   const changes = r.transfers === 0 ? "direct" : `${r.transfers} change${r.transfers === 1 ? "" : "s"}`;
   const walkAlt = res.direct_walk_min != null && res.direct_walk_min < r.expected_min
     ? `<div class="note ok">Walking directly may be quicker: ~${fmtMin(res.direct_walk_min)}.</div>` : "";
-  return `<div class="card">
-    <div class="summary">
+  const osm = r.legs.some((l) => l.walk_source === "osm");
+  const fs = fareShort(f);
+  return `<details class="card alt"${open ? " open" : ""}>
+    <summary class="summary">
+      <span class="alt-rank">Route ${rank}</span>
       <div class="big">~${fmtMin(r.journey_min)} <span class="meta">+ up to ${fmtMin(r.initial_headway_min)} wait</span></div>
-      <div class="meta">${badges(lines)} ${changes}${r.transfer_wait_min > 0 ? ` · includes ~${fmtMin(r.transfer_wait_min)} waiting at changes` : ""}</div>
-      <div class="meta">Expected ~${fmtMin(r.expected_min)} with an average first wait</div>
+      <div class="meta">${badges(lines)} ${changes}${r.walk_min > 0 ? ` · walk ~${fmtMin(r.walk_min)}` : ""}${fs ? ` · fare ${esc(fs)}` : ""}</div>
+      <div class="meta">Expected ~${fmtMin(r.expected_min)} with an average first wait${r.transfer_wait_min > 0 ? ` · includes ~${fmtMin(r.transfer_wait_min)} waiting at changes` : ""}</div>
       ${r.excludes_far_access ? `<div class="meta">Times exclude getting to or from a station beyond your ${fmtDist(filters.maxWalkM)} max walk.</div>` : ""}
-    </div>
+    </summary>
     ${fareHtml(r)}
     ${walkAlt}
     ${journeyHtml(r)}
+    ${osm ? `<div class="meta osm-attr">${OSM_WALK_ATTR}</div>` : ""}
     ${r.uses_estimate ? `<div class="note">This route uses estimated values (marked above). Times may differ from the real service.</div>` : ""}
-  </div>`;
+  </details>`;
 }
 
 const pointOf = (e) => (e.type === "station" ? net.stations[e.id] : e);
@@ -384,13 +467,23 @@ function render() {
     wireResultButtons(out);
     return;
   }
-  const r = tab === "fewest" && res.fewest ? res.fewest : res.fastest;
-  const tabs = res.fewest ? `<div class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="fastest" aria-selected="${r === res.fastest}">Fastest · ${fmtMin(res.fastest.expected_min)}</button>
-      <button type="button" role="tab" data-tab="fewest" aria-selected="${r === res.fewest}">Fewest changes · ${res.fewest.transfers}</button>
-    </div>` : "";
-  out.innerHTML = note + tabs + routeCard(r, res);
-  out.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
+  // Alternatives (PLAN.md §4f), each with its fare (§4d)
+  const items = alternatives(graph, from, to, q).map((r) => ({ r, f: computeFares(net, r) }));
+  const fareKey = ({ f }) => (!f || !f.segments.length ? [2, 0] : f.complete ? [0, f.known_total] : f.known_total > 0 ? [1, f.known_total] : [2, 0]);
+  const order = {
+    fastest: (a, b) => a.r.expected_min - b.r.expected_min,
+    fewest: (a, b) => a.r.transfers - b.r.transfers || a.r.expected_min - b.r.expected_min,
+    cheapest: (a, b) => { const x = fareKey(a), y = fareKey(b); return x[0] - y[0] || x[1] - y[1] || a.r.expected_min - b.r.expected_min; },
+  };
+  items.sort(order[sortBy]);
+  const sorter = items.length > 1 ? `<div class="tabs sortbar" role="group" aria-label="Sort routes">
+      ${[["fastest", "Fastest"], ["fewest", "Fewest changes"], ["cheapest", "Cheapest"]].map(([k, t]) =>
+        `<button type="button" data-sort="${k}" aria-pressed="${sortBy === k}">${t}</button>`).join("")}
+    </div>
+    <p class="filters-note">${items.length} route${items.length > 1 ? "s" : ""}${sortBy === "cheapest" && items.some((x) => !x.f?.complete)
+      ? " · only published fares (ERL) can be compared; Rapid KL and KTM fares are not included" : ""}</p>` : "";
+  out.innerHTML = note + sorter + items.map((x, i) => routeCard(x.r, res, x.f, i === 0, i + 1)).join("");
+  out.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { sortBy = b.dataset.sort; render(); }));
   wireResultButtons(out);
 }
 
@@ -432,7 +525,7 @@ function drawFilters() {
   $("maxwalk").value = String(filters.maxWalkM);
   $("reset-filters").hidden = filtersAreDefault();
 }
-function applyFilters() { saveFilters(); drawFilters(); render(); }
+function applyFilters() { saveFilters(); drawFilters(); render(); ensureWalks("from"); ensureWalks("to"); }
 function resetFilters() { filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] }; applyFilters(); }
 function setupFilters() {
   loadFilters();
@@ -450,7 +543,7 @@ function setupFilters() {
 
 // Stations and typed places are remembered; the current location never is.
 function save() {
-  const keep = (e) => (e && !e.geo ? e : null);
+  const keep = (e) => (e && !e.geo ? { ...e, walks: undefined } : null);
   try { localStorage.setItem("klrail", JSON.stringify({ v: 2, from: keep(picked.from), to: keep(picked.to) })); } catch {}
 }
 function restore() {
@@ -488,6 +581,11 @@ async function main() {
   $("day").addEventListener("change", render);
   $("time").addEventListener("change", render);
   showBanner();
+  if (CONFIG.contactEmail) {
+    const c = $("contact");
+    c.innerHTML = `Contact: <a href="mailto:${esc(CONFIG.contactEmail)}">${esc(CONFIG.contactEmail)}</a>`;
+    c.hidden = false;
+  }
   restore();
   render();
 }

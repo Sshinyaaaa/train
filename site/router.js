@@ -139,8 +139,15 @@ function endpointStops(net, e, opts) {
   if (e.type === "station") {
     return net.stations[e.id].stops.map((s) => ({ stop: s, sec: 0, far: false, station: e.id, dist_m: 0, walk: false }));
   }
-  return accessCandidates(net, e, opts).flatMap((c) => c.stops.map((x) => (
-    { stop: x.stop, sec: x.walk_sec, far: c.far, station: c.station, dist_m: x.dist_m, walk: true })));
+  return accessCandidates(net, e, opts).flatMap((c) => c.stops.map((x) => {
+    // e.walks: real walking distances (OSM route, PLAN.md §4e); walk time at 4.5 km/h, no detour factor
+    const real = e.walks?.[x.stop];
+    if (real && Number.isFinite(real.dist_m)) {
+      return { stop: x.stop, sec: (real.dist_m / ACCESS.speedMPerMin) * 60, far: c.far, station: c.station,
+               dist_m: real.dist_m, walk: true, source: "osm" };
+    }
+    return { stop: x.stop, sec: x.walk_sec, far: c.far, station: c.station, dist_m: x.dist_m, walk: true, source: "estimated" };
+  }));
 }
 
 // mode "fastest": minimise (expected, boardings); "fewest": minimise (boardings, expected).
@@ -166,7 +173,8 @@ function search(g, from, to, query, mode) {
   const seen = (chain, st) => { for (let c = chain; c; c = c.prev) if (c.st === st) return true; return false; };
   // Virtual start: every candidate line-stop, seeded with its own access walk.
   for (const o of endpointStops(net, from, accessOpts)) {
-    const edge = o.walk ? { type: "access", place: from.name, stop: o.stop, dist_m: o.dist_m, sec: o.sec, far: o.far } : null;
+    const edge = o.walk ? { type: "access", place: from.name, stop: o.stop, dist_m: o.dist_m, sec: o.sec, far: o.far, source: o.source,
+                            placePoint: { lat: from.lat, lon: from.lon } } : null;
     const l = { state: `s|${o.stop}`, cost: o.sec, farSec: o.far ? o.sec : 0, boardings: 0, initialWait: 0, initialHeadway: 0,
                 prev: null, edge, station: o.station, visited: { st: o.station, prev: null } };
     const cur = best.get(l.state);
@@ -199,11 +207,13 @@ function search(g, from, to, query, mode) {
       const t = targets.get(stop);
       if (t && (!needRide || l.boardings > 0)) {
         // Virtual end: egress walk (0 for a station destination).
-        const edge = { type: "egress", place: to.name, stop, dist_m: t.dist_m, sec: t.sec, far: t.far, walk: t.walk };
+        const edge = { type: "egress", place: to.name, stop, dist_m: t.dist_m, sec: t.sec, far: t.far, walk: t.walk, source: t.source,
+                       placePoint: { lat: to.lat, lon: to.lon } };
         relax(l, "END", null, t.sec, edge, { farSec: l.farSec + (t.far ? t.sec : 0) });
       }
       for (const b of g.boards.get(stop) || []) {
         if (enabled && !enabled.has(lineMode(net, b.line))) continue;   // mode filter
+        if (query.banLines && query.banLines.has(b.line)) continue;      // alternatives search
         const p = net.lines[b.line].patterns[b.pi];
         const hw = headwayForBoarding(p, b.i, query.day, t0 + l.cost);
         if (hw == null) continue;
@@ -260,8 +270,9 @@ function buildRoute(g, label) {
       legs.push(ride); ride = null;
     } else if (e.type === "access" || e.type === "egress") {
       if (e.type === "egress" && !e.walk) continue;   // station destination: nothing to show
-      legs.push({ type: e.type, place: e.place, stop: e.stop, dist_m: Math.round(e.dist_m),
-                  walk_min: e.far ? null : round1(e.sec), far: e.far, flags: e.far ? ["far_access"] : [] });
+      const flags = e.far ? ["far_access"] : e.source === "estimated" ? ["estimated_walk"] : [];
+      legs.push({ type: e.type, place: e.place, place_point: e.placePoint, stop: e.stop, dist_m: Math.round(e.dist_m),
+                  walk_min: e.far ? null : round1(e.sec), walk_source: e.source, far: e.far, flags });
     } else if (e.type === "transfer") {
       const t = e.t, flags = [];
       if (t.walk_source === "estimated") flags.push("estimated_walk");
@@ -294,6 +305,7 @@ function buildRoute(g, label) {
     stations: stationsVisited(label),
     transfers: Math.max(0, rides.length - 1),
     lines: rides.map(r => r.line),
+    walk_min: round1(60 * withChanges.reduce((a, x) => a + (x.type !== "ride" && x.walk_min ? x.walk_min : 0), 0)),
     legs: withChanges,
     flags,
     uses_estimate: flags.some(f => f.startsWith("estimated") || f === "typical_headway"),
@@ -368,4 +380,48 @@ export function linesNotRunning(g, lineIds, query = DEFAULT_QUERY, atStops = nul
   const only = atStops ? new Set(atStops) : null;
   return lineIds.filter((lid) => !g.net.lines[lid].patterns.some((p) =>
     p.stops.slice(0, -1).some((s, i) => (!only || only.has(s)) && headwayForBoarding(p, i, q.day, t) != null)));
+}
+
+// A route's identity for "genuinely different": for each train, the boarding and alighting stations
+// plus the fare system. Lines of one fare system sharing track between the same stations (Ampang /
+// Sri Petaling, Masjid Jamek -> Hang Tuah) are the same route; KLIA Ekspres vs KLIA Transit are not.
+export function routeSignature(net, r) {
+  const system = (lid) => Object.entries(net.fares?.systems || {}).find(([, s]) => s.lines.includes(lid))?.[0] ?? lid;
+  return r.legs.filter((l) => l.type === "ride")
+    .map((l) => `${net.stops[l.from].station}>${net.stops[l.to].station}@${system(l.line)}`).join(" | ");
+}
+
+// Up to `max` genuinely different routes (PLAN.md §4f): distinct boarding/alighting stations, found by re-running
+// the search with lines of earlier results banned one at a time (breadth-first). Routes much slower
+// than the fastest (beyond max(30 min, 50 %)) are dropped.
+export function alternatives(g, fromEp, toEp, query = DEFAULT_QUERY, { max = 5, maxSearches = 24 } = {}) {
+  const base = route(g, fromEp, toEp, query);
+  if (!base) return [];
+  const q = { ...DEFAULT_QUERY, ...query };
+  const from = normEndpoint(fromEp), to = normEndpoint(toEp);
+  const limit = base.fastest.expected_min + Math.max(30, 0.5 * base.fastest.expected_min);
+  const out = [], seenSig = new Set(), seenBan = new Set([""]);
+  const add = (r) => {
+    const sig = routeSignature(g.net, r);
+    if (seenSig.has(sig) || r.expected_min > limit) return;
+    seenSig.add(sig);
+    out.push({ ...r, signature: sig });
+  };
+  add(base.fastest);
+  if (base.fewest) add(base.fewest);
+  const queue = [...new Set([...base.fastest.lines, ...(base.fewest?.lines || [])])].map((l) => [l]);
+  let searches = 0;
+  while (queue.length && out.length < max && searches < maxSearches) {
+    const ban = queue.shift();
+    const key = [...ban].sort().join("|");
+    if (seenBan.has(key)) continue;
+    seenBan.add(key);
+    searches++;
+    const lab = search(g, from, to, { ...q, banLines: new Set(ban) }, "fastest");
+    if (!lab) continue;
+    const r = buildRoute(g, lab);
+    add(r);
+    for (const l of r.lines) if (!ban.includes(l)) queue.push([...ban, l]);
+  }
+  return out.slice(0, max);
 }

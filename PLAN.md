@@ -396,6 +396,70 @@ systems, an unknown stop in a fare table, or a non-positive price.
   Rapid KL, "Check fare on MyRapid").
 - **Sources:** a "Fares as of [date], source: [operator]" line for each fare source used.
 
+## 4e. Real walking routes, place check, directions links (M4.3)
+
+**Diagnosis that motivated this** (2026-09-28), for Pasar Seni → GMBB:
+- Photon geocoded GMBB correctly (OSM way 1060208509, Jalan Robertson).
+- The straight-line estimate was the fault. For Merdeka, 413 m straight (~7 min estimated) is a
+  **1,211 m** real walk (~16 min). For Plaza Rakyat, 280 m straight is a 1,313 m walk.
+
+**Walking routes (OSRM foot, FOSSGIS `routing.openstreetmap.de`):**
+- **Scope:** only first and last walks from a **typed place**.
+  - Current location keeps the straight-line estimate, because the page promises it never leaves
+    the browser.
+  - Station-to-station transfer walks are unchanged.
+- **Request:** after a place is picked, **one `table` request per end** (place → the line-stops of
+  its ≤ 4 candidate stations), `annotations=distance`. Walk time = OSM walking distance ÷ 75 m/min,
+  the same 4.5 km/h as OSRM's foot profile.
+- **Following the FOSSGIS terms:**
+  - A request queue of at most **1 request per second**, and never bulk use.
+  - The browser's own User-Agent and Referer.
+  - The service URL lives in `site/config.js`, not in the code.
+  - The OSM credit plus a "report error" link to <https://www.openstreetmap.org/fixthemap> appear
+    wherever OSM walks are used.
+  - An **operator contact email must be shown on the site**, so the feature is **off until
+    `CONFIG.contactEmail` is set**.
+- **Cache:** 30 min, keyed by the place and stops, and also kept in `sessionStorage` so reloads in
+  the same tab don't query again.
+- **Backoff:** after **HTTP 429**, no requests for 60 s; estimates are used meanwhile. A test run of
+  rapid reloads did hit a 429 before this was added.
+- **Fallback:** if the service is off, failing or slow (5 s timeout), use the straight-line estimate
+  (×1.3 at 4.5 km/h), labelled "estimated walk".
+- **Router:** a place endpoint may carry `walks: {stopId: {dist_m}}`, and access or egress legs then
+  use them (`walk_source: "osm"`). Candidate selection is still by straight-line distance, so the
+  max-walk rules in §4c are unchanged.
+
+**Place confirmation:**
+- After a typed place is picked, a small Leaflet map (from cdnjs, loaded lazily) with OSM tiles and
+  a pin appears under the field.
+- It follows the OSMF tile policy: credit visible on the map, no bulk or offline use, default
+  browser headers.
+- Current location gets no map, since tiles would reveal it.
+
+**Directions links:**
+- Every walk leg gets "Open walking directions", a plain Google Maps URL
+  (`https://www.google.com/maps/dir/?api=1&origin=…&destination=…&travelmode=walking`).
+- Nothing is sent until it's tapped. The footer says so.
+
+## 4f. Route alternatives (M6)
+
+- **Search:** `alternatives()` returns up to **5 genuinely different routes**.
+  1. Start from the fastest and fewest-transfers routes.
+  2. Re-run the search with each line used so far banned, one at a time, breadth-first, capped at
+     24 searches.
+  3. Keep a route only if it's new by **boarding and alighting stations plus fare system**, and its
+     `expected_min` is within `max(30, 50%)` minutes of the fastest.
+     - Shared-track twins in one fare system (Ampang and Sri Petaling between the same stations)
+       count as one route.
+     - KLIA Ekspres and KLIA Transit are separate fare systems, so they stay distinct.
+- **Card:** line badges, journey time with worst-case first wait, changes, total walking, and the
+  fare line (§4d). Details expand.
+- **Sort:**
+  - *Fastest*: `expected_min`.
+  - *Fewest changes*: transfers, then time.
+  - *Cheapest*: fully-priced routes first, by total; then partly-priced ones by their known lower
+    bound, labelled "from"; unpriced last. The UI notes that unknown fares can't be compared.
+
 ## 5. Validation checks (`scripts/validate.py`, run by the build)
 
 Errors: the build writes nothing, and CI doesn't deploy. Warnings: stored in `meta.warnings`,
@@ -517,8 +581,11 @@ fallback. To update it, rebuild locally and commit.
 5. **M4 – places — DONE:** search from and to a place or the current location, with access legs
    (§4b).
    - **M4.1 – filters:** mode chips, max walk, no-route mode suggestions (§4c).
+   - **M4.3 – walking:** OSRM walking routes for typed places (enabled once a contact email is
+     set), a place map pin, and walking-directions links (§4e).
    - **M4.2 – fares:** ERL fares, operator links for Rapid KL and KTM (§4d). Next: Rapid KL once
      permission comes, and KTM after review of the 2015 tables.
+6. **M6 – route alternatives:** up to 5 distinct routes, sortable (§4f).
 6. **M5 – timetable-aware KTM:** real departures (next train after arrival) instead of headway / 2,
    respecting `calendar_dates`.
 7. **Later / optional:**

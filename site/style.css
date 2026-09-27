@@ -245,6 +245,21 @@ details.stops summary { cursor: pointer; }
 .fare .meta { color: var(--muted); font-size: .8rem; }
 .fare details p { margin: 4px 0; }
 
+/* ---- place map, directions links, route alternatives ------------------------------------ */
+.placemap { margin-top: 6px; }
+.placemap-name { font-size: .82rem; margin-bottom: 4px; }
+.placemap-map { height: 140px; border: 2px solid var(--field-line); background: var(--field); }
+.placemap .leaflet-control-attribution { font-size: 11px; }
+.dirlink { font-size: .82rem; }
+.osm-attr { margin-top: 8px; font-size: .78rem; }
+details.card.alt { margin-bottom: 12px; }
+details.card.alt > summary { list-style: none; cursor: pointer; position: relative; padding-right: 22px; }
+details.card.alt > summary::-webkit-details-marker { display: none; }
+details.card.alt > summary::after { content: "▸"; position: absolute; right: 2px; top: 2px; color: var(--muted); }
+details.card.alt[open] > summary::after { content: "▾"; }
+.alt-rank { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.sortbar button[aria-pressed=true] { border-color: var(--accent); font-weight: 700; box-shadow: 2px 2px 0 var(--accent); }
+
 @media (min-width: 720px) {
   h1 { font-size: 1.6rem; }
   .emblem { width: 48px; height: 54px; }
