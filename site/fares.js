@@ -5,7 +5,13 @@
 // transfer). Segments in different systems are priced separately and added together.
 // A segment is priced only from a published table in the data; otherwise it's "unavailable" and the
 // UI links to the operator. Rapid KL has no fare data (permission pending); KTM uses KTMB's 2015
-// tables with a caveat (cash price; cashless shown alongside, transcribed from an image).
+// tables with a caveat.
+//
+// Fare type (chosen by the user): each system maps cashless / cash / concession to a fare table,
+// or to text only (ERL concessions need registration, so no price is computed).
+
+export const FARE_TYPES = ["cashless", "cash", "concession"];
+export const DEFAULT_FARE_TYPE = "cashless";
 
 function systemOfLine(net, lineId) {
   for (const [id, sys] of Object.entries(net.fares?.systems || {})) if (sys.lines.includes(lineId)) return id;
@@ -24,7 +30,7 @@ function lookup(table, from, to) {
 }
 
 // route: a router result (fastest/fewest). Returns null if the network has no fare data at all.
-export function computeFares(net, route) {
+export function computeFares(net, route, { fareType = DEFAULT_FARE_TYPE } = {}) {
   if (!net.fares) return null;
   const segments = [];
   for (const leg of route.legs) {
@@ -39,14 +45,20 @@ export function computeFares(net, route) {
     seg.name = sys.name || seg.system;
     seg.fare_url = sys.fare_url || null;
     seg.link_text = sys.link_text || seg.name;
-    seg.price = lookup(sys.table, seg.from, seg.to);
+    const ft = sys.fare_types?.[fareType];
+    seg.fare_type = fareType;
+    seg.price = lookup(ft?.table, seg.from, seg.to);
     if (seg.price != null) {
-      seg.as_of = sys.table.effective || sys.table.retrieved;
+      seg.as_of = ft.table.effective || ft.table.retrieved;
       seg.source_label = sys.source_label || seg.name;
-      seg.source_url = sys.table.source;
+      seg.source_url = ft.table.source;
       seg.caveat = sys.caveat || null;
-      const alt = lookup(sys.secondary_table, seg.from, seg.to);
-      if (alt != null) seg.secondary = { label: sys.secondary_label, price: alt, status: sys.secondary_table.status || null };
+      seg.status = ft.table.status || null;       // e.g. KTM cashless "transcribed from image, unverified"
+      seg.type_label = ft.label || null;
+      seg.type_note = ft.note || null;
+    } else if (ft?.text) {
+      seg.type_text = ft.text;                    // text-only fare type: no price
+      seg.type_url = ft.url || null;
     }
   }
   const known = segments.filter((s) => s.price != null);
@@ -55,7 +67,7 @@ export function computeFares(net, route) {
   // one "Fares as of ..." line per source actually used
   const sources = [];
   for (const s of known) {
-    if (!sources.some((x) => x.label === s.source_label && x.as_of === s.as_of)) sources.push({ label: s.source_label, as_of: s.as_of, url: s.source_url, caveat: s.caveat });
+    if (!sources.some((x) => x.label === s.source_label && x.as_of === s.as_of && x.url === s.source_url)) sources.push({ label: s.source_label, as_of: s.as_of, url: s.source_url, caveat: s.caveat });
   }
   return {
     segments,
@@ -64,6 +76,7 @@ export function computeFares(net, route) {
     missing_names: [...new Set(missing.map((s) => s.name))],
     added_together: segments.length > 1,
     sources,
+    fare_type: fareType,
     currency: "RM",
   };
 }

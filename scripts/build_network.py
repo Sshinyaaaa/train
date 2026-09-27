@@ -319,14 +319,18 @@ def load_fares():
     systems = {}
     for sid, sysd in ops["systems"].items():
         sysd = dict(sysd)
-        for field in ("table", "secondary_table"):
-            ref = sysd.pop(field, None)
-            if ref:
-                fname, key = ref.split("#")
+        # fare_types: {cashless|cash|concession: {table: "file.json#key"} or {text, url}} (the user picks one)
+        types = {}
+        for ft, spec in sysd.pop("fare_types", {}).items():
+            spec = dict(spec)
+            if spec.get("table"):
+                fname, key = spec["table"].split("#")
                 src = json.loads((d / fname).read_text(encoding="utf-8"))
-                sysd[field] = _compact_table(src, key)
-                if field == "table":
-                    sysd["notes"] = src.get("notes", [])
+                spec["table"] = _compact_table(src, key)
+                sysd.setdefault("notes", src.get("notes", []))
+            types[ft] = spec
+        if types:
+            sysd["fare_types"] = types
         systems[sid] = sysd
     return {"systems": systems}
 

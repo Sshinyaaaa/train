@@ -272,3 +272,6 @@ details.card.alt[open] > summary::after { content: "▾"; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .snowfall { display: none; }
 }
+
+/* the hidden attribute always wins over display rules like .filter-row { display: flex } */
+[hidden] { display: none !important; }

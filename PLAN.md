@@ -407,12 +407,25 @@ systems, an unknown stop in a fare table, or a non-positive price.
 |---|---|---|
 | ERL (both lines) | `overrides/fares/erl.json`: adult one-way standard fares from ERL's fare tables, with the source URL and `retrieved` date (2026-09-28) | Priced |
 | Rapid KL | No fare data: permission requested from Prasarana. No bulk collection, no live API calls | Segments link "Check fare on MyRapid" to the official calculator |
-| KTM Komuter | `overrides/fares/ktm.json` from KTMB's fare tables **effective 2 Dec 2015**, by `scripts/extract_ktm_fares.py`. **Cash** extracted from the PDF text layer and used as the price. **Cashless** transcribed from the image, shown alongside and marked "unverified". Concession stored, not shown | Displayed with "KTMB fare table effective 2 Dec 2015, may be outdated" until the owner confirms. Abdullah Hukum and Kajang 2 are missing, so "fare unavailable" |
+| KTM Komuter | `overrides/fares/ktm.json` from KTMB's fare tables **effective 2 Dec 2015**, by `scripts/extract_ktm_fares.py`. **Cash** and **concession** extracted from the PDF text layer. **Cashless** transcribed from the image and marked "unverified" | Displayed with "KTMB fare table effective 2 Dec 2015, may be outdated" until the owner's spot checks confirm it. Abdullah Hukum and Kajang 2 are missing, so "fare unavailable" |
 
 - **KLIA Transit:** 15 station pairs, symmetric.
 - **KLIA Ekspres:** KL Sentral ↔ KLIA T1/T2 only. ERL publishes no Ekspres fare for T1 ↔ T2, so that
   segment is unavailable.
-- **Concession fares** are shown only as text notes from ERL's pages, never calculated.
+- **Concession fares:** ERL concessions are shown only as text from ERL's pages, never calculated.
+
+**Fare type** (selector in the filters: Cashless / Cash / Concession; default Cashless; remembered in
+`localStorage` `klrail.fareType`). `operators.json` maps each type per system (`fare_types`) to a
+table or to text only:
+
+| System | Cashless | Cash | Concession |
+|---|---|---|---|
+| KTM Komuter | cashless table (transcribed, "unverified" shown on the row) | cash table | concession table (2015 title: children, seniors, disabled, students) |
+| KLIA Transit | standard fare | standard fare (ERL publishes one adult fare, so cash = cashless; the 10% online discount isn't applied) | text only: "one-way fare less 30%", registration required, no price |
+| KLIA Ekspres | standard fare | standard fare | text only: ERL publishes no concession fare |
+| Rapid KL | "Check fare on MyRapid" | same | same |
+
+A text-only segment counts as unpriced ("from RM X + KLIA Transit fare").
 
 **Display** (`site/fares.js` → the route card):
 - **Total:**

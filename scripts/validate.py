@@ -22,6 +22,9 @@ MAP_COUNTS = {"ktmb:KC05_KB18": 27, "ktmb:KA15_KD19": 34, "rapid:AG": 18, "rapid
               "erl-klia-ekspres": 3, "erl-klia-transit": 6}
 
 
+FARE_TYPES = ("cashless", "cash", "concession")   # site/fares.js FARE_TYPES
+
+
 def validate(net, today=None):
     """Return (errors, warnings). `today` (a date) recomputes feed staleness, e.g. at deploy time."""
     errors, warnings = [], []
@@ -71,8 +74,12 @@ def validate(net, today=None):
                     errors.append(f"fare system {sid}: unknown line {lid}")
             local = {s.rsplit(":", 1)[1] for lid in sysd["lines"] if lid in lines
                      for p in lines[lid]["patterns"] for s in p["stops"]}
-            for field in ("table", "secondary_table"):
-                tb = sysd.get(field)
+            for ft, spec in sysd.get("fare_types", {}).items():
+                if ft not in FARE_TYPES:
+                    errors.append(f"fare system {sid}: unknown fare type {ft}")
+                if not spec.get("table") and not spec.get("text"):
+                    errors.append(f"fare system {sid}: fare type {ft} has neither a table nor text")
+                tb = spec.get("table")
                 if not tb:
                     continue
                 for s in tb["ids"]:

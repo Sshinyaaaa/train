@@ -1,5 +1,5 @@
 {
- "_note": "Fare systems: a ride leg belongs to the fare system of its line. Consecutive legs in the same system are one fare segment. Different systems are priced separately and added together.",
+ "_note": "Fare systems: a ride leg belongs to the fare system of its line. Consecutive legs in the same system are one fare segment. Different systems are priced separately and added together. fare_types: what each fare type (cashless / cash / concession, chosen by the user) uses: a fare table, or text only.",
  "systems": {
   "rapidkl": {
    "name": "Rapid KL",
@@ -25,11 +25,20 @@
    ],
    "fare_url": "https://www.ktmb.com.my/komuter.html",
    "link_text": "KTM Komuter fares",
-   "table": "ktm.json#cash",
-   "secondary_table": "ktm.json#cashless",
-   "secondary_label": "cashless",
    "source_label": "KTMB (ktmb.com.my)",
-   "caveat": "KTMB fare table effective 2 Dec 2015, may be outdated"
+   "caveat": "KTMB fare table effective 2 Dec 2015, may be outdated",
+   "fare_types": {
+    "cashless": {
+     "table": "ktm.json#cashless"
+    },
+    "cash": {
+     "table": "ktm.json#cash"
+    },
+    "concession": {
+     "table": "ktm.json#concession",
+     "label": "concession (children, senior citizens, disabled persons, students, per the 2015 table)"
+    }
+   }
   },
   "erl-klia-transit": {
    "name": "KLIA Transit",
@@ -38,8 +47,21 @@
    ],
    "fare_url": "https://www.kliaekspres.com/products-fares/klia-transit/",
    "link_text": "KLIA Transit fares",
-   "table": "erl.json#erl-klia-transit",
-   "source_label": "ERL (kliaekspres.com)"
+   "source_label": "ERL (kliaekspres.com)",
+   "fare_types": {
+    "cashless": {
+     "table": "erl.json#erl-klia-transit",
+     "note": "ERL publishes one adult standard fare (no separate cash/cashless price); its 10% online discount is not applied"
+    },
+    "cash": {
+     "table": "erl.json#erl-klia-transit",
+     "note": "ERL publishes one adult standard fare (no separate cash/cashless price); its 10% online discount is not applied"
+    },
+    "concession": {
+     "text": "Concession (Malaysian senior citizens 60+, registered disabled persons, eligible students): one-way fare less 30%. Registration with ERL is required, so no concession price is shown.",
+     "url": "https://www.kliaekspres.com/products-fares/concession-ticket/"
+    }
+   }
   },
   "erl-klia-ekspres": {
    "name": "KLIA Ekspres",
@@ -48,8 +70,21 @@
    ],
    "fare_url": "https://www.kliaekspres.com/products-fares/klia-ekspres/",
    "link_text": "KLIA Ekspres fares",
-   "table": "erl.json#erl-klia-ekspres",
-   "source_label": "ERL (kliaekspres.com)"
+   "source_label": "ERL (kliaekspres.com)",
+   "fare_types": {
+    "cashless": {
+     "table": "erl.json#erl-klia-ekspres",
+     "note": "ERL publishes one adult standard fare (no separate cash/cashless price); its 10% online discount is not applied"
+    },
+    "cash": {
+     "table": "erl.json#erl-klia-ekspres",
+     "note": "ERL publishes one adult standard fare (no separate cash/cashless price); its 10% online discount is not applied"
+    },
+    "concession": {
+     "text": "KLIA Ekspres has no published concession fare (ERL asks disabled and senior passengers to contact them). Children 6-15: RM25 single.",
+     "url": "https://www.kliaekspres.com/products-fares/klia-ekspres/"
+    }
+   }
   }
  }
 }

@@ -95,11 +95,15 @@ class Validation(unittest.TestCase):
 
     def test_fare_systems(self):
         net = tiny_net()
-        net["fares"] = {"systems": {"s": {"lines": ["x:L"], "table": {"ids": ["a", "zz"], "cents": [[None, 100], [100, None]]}}}}
+        net["fares"] = {"systems": {"s": {"lines": ["x:L"], "fare_types": {"cash": {"table": {"ids": ["a", "zz"], "cents": [[None, 100], [100, None]]}}}}}}
         errs = self.errors(net)
         self.assertTrue(any("unknown stop zz" in e for e in errs))
-        net["fares"]["systems"]["s"]["table"] = {"ids": ["a", "b"], "cents": [[None, 0], [0, None]]}
+        net["fares"]["systems"]["s"]["fare_types"]["cash"]["table"] = {"ids": ["a", "b"], "cents": [[None, 0], [0, None]]}
         self.assertTrue(any("bad price" in e for e in self.errors(net)))
+        net["fares"]["systems"]["s"]["fare_types"] = {"student": {"text": "x"}, "concession": {}}
+        errs = self.errors(net)
+        self.assertTrue(any("unknown fare type student" in e for e in errs))
+        self.assertTrue(any("concession has neither a table nor text" in e for e in errs))
         net["fares"]["systems"] = {}
         self.assertTrue(any("in 0 fare systems" in e for e in self.errors(net)))
 

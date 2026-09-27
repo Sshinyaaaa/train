@@ -1,4 +1,4 @@
-import { computeFares, fareSummary } from "./fares.js";
+import { computeFares, fareSummary, FARE_TYPES, DEFAULT_FARE_TYPE } from "./fares.js";
 import { CONFIG } from "./config.js";
 import { createWalkService, walkAllowed } from "./walk.js";
 import { loadNetwork, route, alternatives, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
@@ -22,6 +22,10 @@ const walkService = createWalkService(CONFIG);
 // Opt-in (off by default): send the current location to the walking-route service. Remembered locally.
 let geoWalkOptIn = false;
 try { geoWalkOptIn = localStorage.getItem("klrail.geoWalk") === "1"; } catch {}
+// Fare type (PLAN.md §4d): cashless (default) / cash / concession. Remembered locally.
+let fareType = DEFAULT_FARE_TYPE;
+try { const v = localStorage.getItem("klrail.fareType"); if (FARE_TYPES.includes(v)) fareType = v; } catch {}
+const FARE_TYPE_TEXT = { cashless: "Adult one-way, cashless", cash: "Adult one-way, cash", concession: "Concession, one-way" };
 // Route filters (PLAN.md §4c): enabled modes + max first/last walk. Persisted per browser.
 const DEFAULT_FILTERS = { modes: [...MODES], maxWalkM: DEFAULT_QUERY.maxWalkM };
 let filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] };
@@ -389,22 +393,26 @@ const fmtDate = (iso) => { const [y, m, d] = iso.split("-").map(Number); return 
 
 // Fare block (PLAN.md §4d): per-operator segments, added together; unknown segments link out.
 function fareHtml(r) {
-  const f = computeFares(net, r);
+  const f = computeFares(net, r, { fareType });
   if (!f || !f.segments.length) return "";
   const total = fareSummary(f);
   const segs = f.segments.map((s) => {
     const where = `${esc(stopName(s.from))} → ${esc(stopName(s.to))}`;
     const link = s.fare_url ? `<a href="${esc(s.fare_url)}" target="_blank" rel="noopener">${esc(s.link_text)}</a>` : "";
-    const value = s.price != null ? `<strong>RM ${s.price.toFixed(2)}</strong>${s.secondary
-        ? `<br><span class="meta">${esc(s.secondary.label)} RM ${s.secondary.price.toFixed(2)}${s.secondary.status ? ` (${esc(s.secondary.status)})` : ""}</span>` : ""}`
+    const value = s.price != null ? `<strong>RM ${s.price.toFixed(2)}</strong>${s.status && /unverified/.test(s.status) ? `<br><span class="meta">(${esc(s.status)})</span>` : ""}`
+      : s.type_text ? `<span class="meta">${esc(s.type_text)}${s.type_url ? ` <a href="${esc(s.type_url)}" target="_blank" rel="noopener">Details</a>` : ""}</span>`
       : s.system === "rapidkl" ? link : `fare unavailable${link ? ` · ${link}` : ""}`;
     return `<li><span>${esc(s.name)}: ${where}</span> <span class="fare-val">${value}</span></li>`;
   }).join("");
+  const typeNotes = [...new Set(f.segments.filter((s) => s.price != null).flatMap((s) => [
+    s.type_label ? `${s.name}: ${s.type_label}.` : null, s.type_note ? `${s.name}: ${s.type_note}.` : null]).filter(Boolean))];
   const notes = [...new Set(f.segments.flatMap((s) => (net.fares.systems[s.system]?.notes || []).map((n) => n.text)))];
+  const kind = FARE_TYPE_TEXT[fareType];
   return `<div class="fare">
     <div class="fare-total">Fare: <strong>${total ? esc(total) : "unavailable"}</strong></div>
-    ${f.added_together ? `<div class="meta">Fares from each operator, added together (adult, one-way).</div>` : `<div class="meta">Adult, one-way.</div>`}
+    <div class="meta">${f.added_together ? `Fares from each operator, added together (${esc(kind.toLowerCase())}).` : `${esc(kind)}.`}</div>
     <ul class="fare-segs">${segs}</ul>
+    ${typeNotes.map((t) => `<div class="meta">${esc(t)}</div>`).join("")}
     ${f.sources.map((x) => x.caveat
       ? `<div class="meta fare-caveat">${esc(x.caveat)}. Source: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></div>`
       : `<div class="meta">Fares as of ${esc(fmtDate(x.as_of))}, source: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></div>`).join("")}
@@ -474,7 +482,7 @@ function render() {
     return;
   }
   // Alternatives (PLAN.md §4f), each with its fare (§4d)
-  const items = alternatives(graph, from, to, q).map((r) => ({ r, f: computeFares(net, r) }));
+  const items = alternatives(graph, from, to, q).map((r) => ({ r, f: computeFares(net, r, { fareType }) }));
   const fareKey = ({ f }) => (!f || !f.segments.length ? [2, 0] : f.complete ? [0, f.known_total] : f.known_total > 0 ? [1, f.known_total] : [2, 0]);
   const order = {
     fastest: (a, b) => a.r.expected_min - b.r.expected_min,
@@ -487,7 +495,7 @@ function render() {
         `<button type="button" data-sort="${k}" aria-pressed="${sortBy === k}">${t}</button>`).join("")}
     </div>
     <p class="filters-note">${items.length} route${items.length > 1 ? "s" : ""}${sortBy === "cheapest" && items.some((x) => !x.f?.complete)
-      ? " · Rapid KL fares aren't available yet, so routes using Rapid KL are ranked by their other fares only" : ""}</p>` : "";
+      ? ` · Some fares aren't available (${esc([...new Set(items.flatMap((x) => x.f?.missing_names || []))].join(", "))}), so those routes are ranked by their known fares only` : ""}</p>` : "";
   out.innerHTML = note + sorter + items.map((x, i) => routeCard(x.r, res, x.f, i === 0, i + 1)).join("");
   out.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { sortBy = b.dataset.sort; render(); }));
   wireResultButtons(out);
@@ -533,6 +541,16 @@ function drawFilters() {
 }
 function applyFilters() { saveFilters(); drawFilters(); render(); ensureWalks("from"); ensureWalks("to"); }
 function resetFilters() { filters = { ...DEFAULT_FILTERS, modes: [...DEFAULT_FILTERS.modes] }; applyFilters(); }
+function setupFareType() {
+  const sel = $("faretype");
+  sel.value = fareType;
+  sel.addEventListener("change", () => {
+    if (!FARE_TYPES.includes(sel.value)) return;
+    fareType = sel.value;
+    try { localStorage.setItem("klrail.fareType", fareType); } catch {}
+    render();
+  });
+}
 function setupGeoWalkToggle() {
   const box = $("geowalk"), row = $("geowalk-row");
   if (!walkService.enabled()) { row.hidden = true; return; }   // nothing to opt into
@@ -601,6 +619,7 @@ async function main() {
   });
   setupFilters();
   setupGeoWalkToggle();
+  setupFareType();
   $("day").addEventListener("change", render);
   $("time").addEventListener("change", render);
   showBanner();
