@@ -92,7 +92,9 @@ scripts/
   seed_transfers.py           one-off: reviewed draft table -> overrides/transfers.json
   audit_gtfs.py, audit_interchanges.py, inspect_pattern.py   (read-only reports)
 site/
-  index.html, app.js, style.css, router.js, fares.js, theme.js
+  index.html, app.js, style.css, router.js, fares.js, theme.js, walk.js, config.js
+  favs.js, nearby.js          favourites/recent trips, nearest stations (M7)
+  sw.js, manifest.webmanifest, icons/   offline + install (M7)
   data/network.json           committed; last good build
 tests/
   test_build.py               python -m unittest discover -s tests
@@ -504,6 +506,59 @@ A text-only segment counts as unpriced ("from RM X + KLIA Transit fare").
   - *Cheapest*: fully-priced routes first, by total; then partly-priced ones by their known lower
     bound, labelled "from"; unpriced last. The UI notes that unknown fares can't be compared.
 
+## 4g. Favourites, offline, nearby stations (M7)
+
+Everything here stays on the device. Nothing new is sent to any server.
+
+**Favourites** (`site/favs.js`, pure and tested in Node):
+- **Saved places:** a station or a typed place, saved as **Home**, **Work** or a custom name (1–40
+  characters).
+  - Saving Home or Work again replaces it, and so does reusing a custom name.
+  - At most 20 places.
+  - Current location can't be saved, because it is never stored.
+- **Recent trips:** the last 5 From → To pairs that gave a route, newest first, with no duplicates.
+  Trips with a current-location end aren't recorded.
+- **One tap:** a place chip fills the first empty field (From, then To); if both are filled it
+  replaces To. A trip chip fills both.
+- **Manage:** save the current From or To under a name, remove single entries, and **Clear all**
+  (a second tap confirms).
+- **Storage:** `localStorage` key `klrail.favs` (`{v: 1, places, trips}`), read and written in
+  try/catch.
+  - If storage is unavailable (blocked, private mode, quota), favourites work in memory for this
+    page and the panel says they won't be kept.
+  - Entries that no longer exist in `network.json` (a station id that's gone) are dropped on load.
+
+**Offline / installable (PWA):**
+- **Install:** `site/manifest.webmanifest` (name, `start_url` / `scope` `./`, standalone, theme
+  colours, PNG icons 192/512 generated from the emblem by `scripts/make_icons.py`) plus
+  `apple-touch-icon`.
+- **Service worker** (`site/sw.js`, scope `/train/`):
+  - **Precache** on install: the app files (`index.html`, JS, CSS, manifest, icons) and
+    `data/network.json`.
+  - **Same-origin GETs are network-first:** `fetch(req, {cache: "no-cache"})`, which is a cheap
+    ETag revalidation. On success the cache is updated. If the network fails, or takes more than
+    4 s when a cached copy exists, the cached copy is used.
+  - **So a deploy reaches returning users on their next online visit**, including the new
+    `network.json`. A new `sw.js` version also deletes old caches on activate.
+  - **Cross-origin requests are never intercepted or cached:** Photon, OSRM, OSM tiles (the OSMF
+    policy forbids offline tile use), Leaflet and fonts.
+- **Offline behaviour** (`navigator.onLine` plus `online`/`offline` events):
+  - **Banner:** "You're offline. Planning with saved timetable data (built …). Place search and
+    real walking routes need internet."
+  - **Place search:** no request is made. The picker says "Place search needs internet. Showing
+    stations only."
+  - **Walking:** real walking routes aren't requested, so walks use the straight-line estimate
+    (already labelled "estimated walk"). They are re-requested on reconnect.
+  - **Place map:** "Map needs internet."
+
+**Nearby stations** (`site/nearby.js`, pure and tested):
+- **Trigger:** a "Stations near me" button. The location is requested only on that tap, used in
+  this page only, and never stored or sent.
+- **List:** the 5 closest stations by straight-line distance, with line badges and distance.
+  Tapping one sets it as **From**.
+- **Distance:** a station's distance is to its nearest line-stop, so a big interchange isn't
+  measured from its centroid.
+
 ## 5. Validation checks (`scripts/validate.py`, run by the build)
 
 Errors: the build writes nothing, and CI doesn't deploy. Warnings: stored in `meta.warnings`,
@@ -583,6 +638,24 @@ and the site shows a banner.
   - the virtual start/end choosing the best combination
   - far legs excluded from the times
   - `direct_walk_min`
+- `tests/favs.test.mjs`:
+  - Home/Work replace, custom names, the 20 limit
+  - current location refused
+  - recent trips deduplicated and capped at 5
+  - invalid stored entries dropped
+  - clear all
+  - storage that throws or is missing (in-memory fallback)
+- `tests/nearby.test.mjs`: nearest 5 order and nearest-line-stop distance.
+- `tests/sw.test.mjs` runs `sw.js` in a sandbox with a fake Cache API and a fake server:
+  - install precaches and activate cleans up
+  - offline answers from the cache
+  - a deploy updates the cache
+  - slow or failing responses fall back to the cache
+  - cross-origin and non-GET requests are left alone
+- `tests/pwa.test.mjs`:
+  - every precached file in `sw.js` exists in `site/`
+  - the manifest has the required fields and its icons exist at the stated sizes
+  - `index.html` links the manifest
 
 ## 7. GitHub Action (`.github/workflows/pages.yml`, M3)
 
@@ -629,13 +702,15 @@ fallback. To update it, rebuild locally and commit.
      set), a place map pin, and walking-directions links (§4e).
    - **M4.2 – fares:** ERL fares, operator links for Rapid KL and KTM (§4d). Next: Rapid KL once
      permission comes, and KTM after review of the 2015 tables.
-6. **M6 – route alternatives:** up to 5 distinct routes, sortable (§4f).
-6. **M5 – timetable-aware KTM and KLIA Transit:** real departures (next train after arrival)
+6. **M6 – route alternatives — DONE:** up to 5 distinct routes, sortable (§4f).
+7. **M5 – timetable-aware KTM and KLIA Transit:** real departures (next train after arrival)
    instead of headway / 2, respecting `calendar_dates`.
    - KLIA Transit uses its full ERL timetable (effective 21 Mar 2026, already parsed by
      `derive_erl_headways.py`), built with the same machinery as KTM.
    - That also covers the 05:00 Salak Tinggi train and ERL's public-holiday timetable.
-7. **Later / optional:**
+8. **M7 – favourites, offline, nearby stations:** saved Home, Work and custom places, the last 5
+   trips, an installable offline PWA, and the 5 nearest stations (§4g).
+9. **Later / optional:**
    - Skypark line
    - Ekspres all-stop after 23:00
    - Transit peak headway once the peak hours are known

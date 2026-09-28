@@ -1,6 +1,8 @@
 import { computeFares, fareSummary, FARE_TYPES, DEFAULT_FARE_TYPE } from "./fares.js";
 import { CONFIG } from "./config.js";
 import { createWalkService, walkAllowed } from "./walk.js";
+import { createFavStore, usableStorage } from "./favs.js";
+import { nearestStations } from "./nearby.js";
 import { loadNetwork, route, alternatives, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
@@ -17,6 +19,8 @@ const $ = (id) => document.getElementById(id);
 let net, graph, stations = [];
 // Endpoint per role: {type: "station", id} | {type: "place", lat, lon, name, geo?: true}
 const picked = { from: null, to: null };
+let favs;                 // favourites + recent trips (PLAN.md §4g), created once the network is loaded
+const isOnline = () => navigator.onLine !== false;
 let sortBy = "fastest";   // fastest | fewest | cheapest (PLAN.md §4f)
 const walkService = createWalkService(CONFIG);
 // Opt-in (off by default): send the current location to the walking-route service. Remembered locally.
@@ -134,7 +138,9 @@ function setupPicker(role) {
     const q = input.value.trim();
     const st = searchStations(q);
     items = [{ kind: "here" }, ...st.map((s) => ({ kind: "station", s }))];
-    if (q.length >= MIN_PLACE_CHARS) {
+    if (q.length >= MIN_PLACE_CHARS && !isOnline()) {
+      items.push({ kind: "info", html: "Place search needs internet. Showing stations only." });
+    } else if (q.length >= MIN_PLACE_CHARS) {
       if (placeState.status === "loading") items.push({ kind: "info", html: "Searching places…" });
       if (placeState.status === "error") items.push({ kind: "info", html: "Place search unavailable. Showing stations only." });
       if (placeState.status === "done") items.push(...placeState.results.map((p) => ({ kind: "place", p })));
@@ -209,7 +215,7 @@ function setupPicker(role) {
     clearTimeout(timer);
     if (ctrl) ctrl.abort();
     const q = input.value.trim();
-    if (q.length < MIN_PLACE_CHARS) { placeState = { status: "idle", results: [] }; return; }
+    if (q.length < MIN_PLACE_CHARS || !isOnline()) { placeState = { status: "idle", results: [] }; return; }
     placeState = { status: "loading", results: [] };
     timer = setTimeout(async () => {
       ctrl = new AbortController();
@@ -261,7 +267,7 @@ function afterPick(role) { updatePlaceMap(role); ensureWalks(role); }
 // Typed places always; current location only with the opt-in toggle.
 async function ensureWalks(role) {
   const ep = picked[role];
-  if (!walkAllowed(ep, { geoOptIn: geoWalkOptIn }) || !walkService.enabled()) return;
+  if (!walkAllowed(ep, { geoOptIn: geoWalkOptIn }) || !walkService.enabled() || !isOnline()) return;   // offline: estimates
   const cands = accessCandidates(net, ep, { modes: filters.modes, maxDistM: filters.maxWalkM });
   const stops = cands.flatMap((c) => c.stops.map((x) => ({ id: x.stop, lat: net.stops[x.stop].lat, lon: net.stops[x.stop].lon })))
     .filter((x) => !ep.walks?.[x.id]);
@@ -296,6 +302,7 @@ async function updatePlaceMap(role) {
   box.hidden = false;
   box.innerHTML = `<div class="placemap-name">${esc(ep.name)} <span class="meta">· check the pin is the right place</span></div>
     <div class="placemap-map" role="img" aria-label="Map showing ${esc(ep.name)}"></div>`;
+  if (!isOnline()) { box.querySelector(".placemap-map").textContent = "Map needs internet."; return; }
   try {
     const L = await loadLeaflet();
     if (picked[role] !== ep) return;
@@ -481,6 +488,7 @@ function render() {
     wireResultButtons(out);
     return;
   }
+  if (favs?.addTrip(from, to)) drawSaved();   // recent trips (PLAN.md §4g); skips current location
   // Alternatives (PLAN.md §4f), each with its fare (§4d)
   const items = alternatives(graph, from, to, q).map((r) => ({ r, f: computeFares(net, r, { fareType }) }));
   const fareKey = ({ f }) => (!f || !f.segments.length ? [2, 0] : f.complete ? [0, f.known_total] : f.known_total > 0 ? [1, f.known_total] : [2, 0]);
@@ -581,6 +589,130 @@ function setupFilters() {
   drawFilters();
 }
 
+// --- Favourites and recent trips (PLAN.md §4g) ---------------------------------------------------
+const shortName = (ep) => {
+  if (ep.type === "station") return stationById(ep.id)?.name || "?";
+  const n = ep.name.split(",")[0];
+  return n.length > 28 ? `${n.slice(0, 27)}…` : n;
+};
+const tripText = (t) => `${shortName(t.from)} → ${shortName(t.to)}`;
+
+function drawSaved() {
+  const places = favs.places(), trips = favs.trips();
+  const chips = places.map((p, i) => `<button type="button" class="chip fav" data-fav="${i}" title="${esc(endpointLabel(p.ep))}"><strong>${esc(p.label)}</strong> ${esc(shortName(p.ep))}</button>`);
+  if (trips.length) chips.push(`<span class="saved-label">Recent</span>`, ...trips.map((t, i) =>
+    `<button type="button" class="chip trip" data-trip="${i}" aria-label="Recent trip ${esc(tripText(t))}">${esc(tripText(t))}</button>`));
+  $("saved-chips").innerHTML = chips.join("");
+  $("saved-chips").hidden = !chips.length;
+  $("saved-list").innerHTML = [
+    ...places.map((p) => `<li><span><strong>${esc(p.label)}</strong>: ${esc(endpointLabel(p.ep))}</span> <button type="button" class="linkbtn" data-remove-fav="${esc(p.label)}" aria-label="Remove ${esc(p.label)}">Remove</button></li>`),
+    ...trips.map((t, i) => `<li><span>Recent: ${esc(tripText(t))}</span> <button type="button" class="linkbtn" data-remove-trip="${i}" aria-label="Remove recent trip ${esc(tripText(t))}">Remove</button></li>`),
+  ].join("") || `<li class="meta">Nothing saved yet.</li>`;
+  $("clear-saved").hidden = !places.length && !trips.length;
+  $("saved-note").textContent = favs.persistent
+    ? "Saved only in this browser. Nothing is sent anywhere."
+    : "This browser isn't allowing storage, so saved places and trips last only until you close this page.";
+}
+
+function setupSaved() {
+  favs = createFavStore(usableStorage(() => localStorage), {
+    isValid: (ep) => ep.type !== "station" || Boolean(net.stations[ep.id]),
+  });
+  const msg = $("save-msg");
+  const say = (text, ok) => { msg.textContent = text; msg.hidden = !text; msg.classList.toggle("ok", Boolean(ok)); };
+  // One tap: a place fills the first empty field (From, then To), else replaces To. A trip fills both.
+  $("saved-chips").addEventListener("click", (e) => {
+    const f = e.target.closest("[data-fav]"), t = e.target.closest("[data-trip]");
+    if (f) {
+      const p = favs.places()[Number(f.dataset.fav)];
+      if (!p) return;
+      setPicked(!picked.from ? "from" : "to", p.ep);
+    } else if (t) {
+      const trip = favs.trips()[Number(t.dataset.trip)];
+      if (!trip) return;
+      setPicked("from", trip.from); setPicked("to", trip.to);
+    } else return;
+    save(); render();
+  });
+  $("save-kind").addEventListener("change", () => { $("save-name").hidden = $("save-kind").value !== "custom"; say(""); });
+  $("save-btn").addEventListener("click", () => {
+    const which = $("save-which").value;
+    const r = favs.savePlace($("save-kind").value, $("save-name").value, picked[which]);
+    if (!r.ok) { say(r.error); return; }
+    say(`Saved ${endpointLabel(picked[which])} as ${r.label}.`, true);
+    $("save-name").value = "";
+    drawSaved();
+  });
+  $("saved-list").addEventListener("click", (e) => {
+    const f = e.target.closest("[data-remove-fav]"), t = e.target.closest("[data-remove-trip]");
+    if (f) favs.removePlace(f.dataset.removeFav);
+    else if (t) favs.removeTrip(Number(t.dataset.removeTrip));
+    else return;
+    say(""); drawSaved();
+  });
+  // Clear all: a second tap within 5 s confirms.
+  const clear = $("clear-saved"), clearText = clear.textContent;
+  let armed = null;
+  clear.addEventListener("click", () => {
+    if (!armed) {
+      clear.textContent = "Tap again to clear everything saved";
+      armed = setTimeout(() => { armed = null; clear.textContent = clearText; }, 5000);
+      return;
+    }
+    clearTimeout(armed); armed = null; clear.textContent = clearText;
+    favs.clearAll(); say("Cleared.", true); drawSaved();
+  });
+  drawSaved();
+}
+
+// --- Nearby stations (PLAN.md §4g): location asked on tap, used here only, never stored or sent ---
+function setupNearby() {
+  const btn = $("nearby-btn"), box = $("nearby");
+  const show = (html) => { box.innerHTML = html; box.hidden = false; };
+  btn.addEventListener("click", () => {
+    if (!("geolocation" in navigator)) { show(`<p class="pick-msg">This browser can't share your location.</p>`); return; }
+    show(`<p class="msg">Locating…</p>`);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const near = nearestStations(net, { lat: pos.coords.latitude, lon: pos.coords.longitude }, 5);
+        show(`<div class="nearby-head"><span>Nearest stations <span class="meta">· straight-line distance · tap to set as From</span></span>
+            <button type="button" class="linkbtn" data-close>Close</button></div>
+          <ul class="nearby-list">${near.map((n) => {
+            const st = stationById(n.station);
+            return `<li><button type="button" data-st="${esc(n.station)}">${badges(st.lines)}<span class="name">${esc(st.name)}<span class="lines">${esc(linesText(st.lines))}</span></span><span class="dist">${fmtDist(n.dist_m)}</span></button></li>`;
+          }).join("")}</ul>`);
+      },
+      (err) => show(`<p class="pick-msg">${err.code === err.PERMISSION_DENIED ? "Location permission denied." : "Couldn't get your location."}</p>`),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    );
+  });
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-st]");
+    if (b) { setPicked("from", { type: "station", id: b.dataset.st }); save(); render(); }
+    if (b || e.target.closest("[data-close]")) { box.hidden = true; box.innerHTML = ""; }
+  });
+}
+
+// --- Offline (PLAN.md §4g) ------------------------------------------------------------------------
+// built_at is UTC; show the date where the reader is (e.g. 19:57Z on 27 Sep is 28 Sep in KL)
+const localDate = (iso) => { const d = new Date(iso); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+function updateOffline() {
+  const b = $("offline");
+  b.hidden = isOnline();
+  if (!b.hidden) {
+    b.textContent = `You're offline. Planning with saved timetable data (built ${localDate(net.meta.built_at)}). Place search and real walking routes need internet.`;
+  }
+}
+function setupOffline() {
+  updateOffline();
+  window.addEventListener("offline", updateOffline);
+  window.addEventListener("online", () => {
+    updateOffline();
+    for (const role of ["from", "to"]) { ensureWalks(role); if (picked[role]?.type === "place") updatePlaceMap(role); }
+  });
+  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
 // Stations and typed places are remembered; the current location never is.
 function save() {
   const keep = (e) => (e && !e.geo ? { ...e, walks: undefined } : null);
@@ -620,6 +752,9 @@ async function main() {
   setupFilters();
   setupGeoWalkToggle();
   setupFareType();
+  setupSaved();
+  setupNearby();
+  setupOffline();
   $("day").addEventListener("change", render);
   $("time").addEventListener("change", render);
   showBanner();

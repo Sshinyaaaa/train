@@ -1,0 +1,15 @@
+{
+  "name": "KL Rail Planner",
+  "short_name": "KL Rail",
+  "description": "Klang Valley rail route planner: LRT, MRT, Monorail, BRT, KTM Komuter and ERL. Plans trips offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0e1714",
+  "theme_color": "#0e1714",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

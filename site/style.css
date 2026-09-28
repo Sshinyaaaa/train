@@ -273,5 +273,31 @@ details.card.alt[open] > summary::after { content: "▾"; }
   .snowfall { display: none; }
 }
 
+/* ---- saved places, recent trips, nearby stations (PLAN.md §4g) ----------------------------- */
+.saved { margin-top: 12px; }
+.saved-chips { align-items: center; }
+.saved-chips .chip { color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-chips .chip strong { color: var(--accent); }
+.saved-label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.saved-actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-top: 6px; }
+.saved-manage { flex: 1 1 100%; font-size: .85rem; }
+.saved-manage summary { cursor: pointer; color: var(--link); font-size: .82rem; padding: 4px 0; }
+.saved-manage input[type=text] { width: auto; flex: 1 1 140px; min-height: 44px; }
+.saved-list { list-style: none; margin: 8px 0; padding: 0; }
+.saved-list li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 2px dotted var(--line); }
+.pick-msg.ok { color: var(--text); }
+.nearby { margin-top: 8px; padding: 8px; background: var(--field); border: 2px solid var(--field-line); }
+.nearby-head { display: flex; justify-content: space-between; gap: 8px; font-size: .85rem; }
+.nearby-head .meta { color: var(--muted); font-size: .78rem; }
+.nearby-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.nearby-list button {
+  font: inherit; color: var(--text); background: none; border: 0; width: 100%; min-height: 44px;
+  display: flex; align-items: center; gap: 8px; padding: 6px 4px; text-align: left; cursor: pointer;
+}
+.nearby-list button:hover { outline: 2px solid var(--field-line); outline-offset: -2px; }
+.nearby-list .name { flex: 1; min-width: 0; }
+.nearby-list .lines { display: block; color: var(--muted); font-size: .78rem; }
+.nearby-list .dist { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+
 /* the hidden attribute always wins over display rules like .filter-row { display: flex } */
 [hidden] { display: none !important; }
