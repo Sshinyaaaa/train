@@ -397,7 +397,28 @@ def build(today):
     fares = load_fares()
     if fares:
         net["fares"] = fares
+    aliases = load_aliases(stops)
+    if aliases is not None:
+        net["aliases"] = aliases
     return net
+
+
+def load_aliases(stops):
+    """overrides/aliases.json: extra search names (landmarks, malls, abbreviations) -> stations
+    (PLAN.md §4h). Entries name line-stop ids, which are stable; the build adds their stations.
+    Unknown stops are kept so validate.py reports them."""
+    f = OVERRIDES / "aliases.json"
+    if not f.exists():
+        return None
+    out = []
+    for a in json.loads(f.read_text(encoding="utf-8"))["aliases"]:
+        sts = []
+        for s in a["stops"]:
+            st = stops.get(s, {}).get("station")
+            if st and st not in sts:
+                sts.append(st)
+        out.append({"alias": a["alias"], "stops": a["stops"], "stations": sts})
+    return out
 
 
 def stats(net):

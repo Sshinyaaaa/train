@@ -35,7 +35,10 @@
     <div class="pickers">
       <div class="picker" data-role="from">
         <label for="from">From</label>
-        <input id="from" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="from-list" aria-autocomplete="list">
+        <div class="field">
+          <input id="from" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="from-list" aria-autocomplete="list">
+          <button type="button" class="clear" id="from-clear" aria-label="Clear From" hidden>×</button>
+        </div>
         <ul id="from-list" class="suggest" role="listbox" hidden></ul>
         <p id="from-msg" class="pick-msg" role="status" hidden></p>
         <div id="from-map" class="placemap" hidden></div>
@@ -43,7 +46,10 @@
       <button type="button" id="swap" class="swap" aria-label="Swap origin and destination">⇅</button>
       <div class="picker" data-role="to">
         <label for="to">To</label>
-        <input id="to" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="to-list" aria-autocomplete="list">
+        <div class="field">
+          <input id="to" type="text" placeholder="Station, place or current location" role="combobox" aria-expanded="false" aria-controls="to-list" aria-autocomplete="list">
+          <button type="button" class="clear" id="to-clear" aria-label="Clear To" hidden>×</button>
+        </div>
         <ul id="to-list" class="suggest" role="listbox" hidden></ul>
         <p id="to-msg" class="pick-msg" role="status" hidden></p>
         <div id="to-map" class="placemap" hidden></div>
@@ -87,8 +93,10 @@
         </select>
       </label>
       <label>Depart
-        <input id="time" type="time" value="11:00" step="300">
+        <input id="time" type="time" value="11:00" step="60">
       </label>
+      <button type="button" id="now" class="chip">Now</button>
+      <button type="submit" id="go" class="chip go">Search</button>
     </div>
     <div class="filters">
       <div class="chips" id="modes" role="group" aria-label="Modes"></div>

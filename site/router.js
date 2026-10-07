@@ -64,6 +64,32 @@ export function inService(pattern, i, t) {
 
 // Headway when boarding pattern at stop i at clock time t. For patterns with service hours the
 // bands are defined at the first stop, so look up the matching first-stop departure time.
+// Last-train warnings (PLAN.md §4h): latest clock time (s, may be past 24:00) a train can be boarded
+// on pattern at stop i on day, consistent with how the router decides boardability: service_hours
+// if the pattern has them, otherwise the end of its last headway band. null = no service that day.
+export function lastBoarding(pattern, i, day) {
+  if (pattern.service_hours) return pattern.service_hours[1] + pattern.run_sec[i];
+  const bands = pattern.headways[day] || [];
+  return bands.length ? Math.max(...bands.map((b) => b[1])) : null;
+}
+
+// Warn when the last boarding is within this many minutes of reaching the platform, or sooner than
+// one worst-case wait (the headway): the modelled train might be the last one, or already gone.
+export const LAST_TRAIN_WARN_MIN = 30;
+
+// reachSec: clock time (s) you reach the platform. Returns null (no concern) or
+// {last_sec, reach_sec, slack_min, missed}. Early-morning reach times are compared as +24 h when the
+// line runs past midnight.
+export function lastTrainCheck(pattern, i, day, reachSec, headwaySec) {
+  const last = lastBoarding(pattern, i, day);
+  if (last == null) return null;
+  let reach = reachSec;
+  if (last >= 86400 && reach < 4 * 3600) reach += 86400;
+  const slack = last - reach;
+  if (slack > LAST_TRAIN_WARN_MIN * 60 && slack >= headwaySec) return null;
+  return { last_sec: last, reach_sec: reach, slack_min: Math.round(slack / 60), missed: slack < 0 };
+}
+
 function headwayForBoarding(pattern, i, day, t) {
   if (!pattern.service_hours) return headwayAt(pattern, day, t);
   if (!inService(pattern, i, t)) return null;
@@ -239,10 +265,12 @@ function search(g, from, to, query, mode) {
 
 const round1 = (sec) => Math.round(sec / 6) / 10;
 
-function buildRoute(g, label) {
+function buildRoute(g, label, query) {
   const { net } = g;
+  const t0 = parseTime(query.time);
   const edges = [];
-  for (let l = label; l && l.edge; l = l.prev) edges.push(l.edge);
+  // _at: cost (s after departure time) when the edge starts, i.e. when you reach the platform for a board
+  for (let l = label; l && l.edge; l = l.prev) edges.push({ ...l.edge, _at: l.prev ? l.prev.cost : 0 });
   edges.reverse();
   const legs = [];
   let ride = null;
@@ -257,6 +285,8 @@ function buildRoute(g, label) {
                _pi: p, _i0: e.i, _i1: e.i };
       if (p.run_source === "estimated") ride.flags.push("estimated_run");
       if (p.headway_source === "gtfs_typical") ride.flags.push("typical_headway");
+      const lt = lastTrainCheck(p, e.i, query.day, t0 + e._at, e.headway);
+      if (lt) { ride.last_train = lt; ride.flags.push("last_train"); }
     } else if (e.type === "ride") {
       const p = net.lines[e.line].patterns[e.pi];
       ride.to = p.stops[e.to]; ride.stops.push(p.stops[e.to]);
@@ -333,8 +363,8 @@ export function route(g, fromEp, toEp, query = DEFAULT_QUERY) {
   if (from.type === "station" && to.type === "station" && from.id === to.id) return null;
   const f = search(g, from, to, q, "fastest");
   if (!f) return null;
-  const fastest = buildRoute(g, f);
-  const fewest = buildRoute(g, search(g, from, to, q, "fewest"));
+  const fastest = buildRoute(g, f, q);
+  const fewest = buildRoute(g, search(g, from, to, q, "fewest"), q);
   const same = JSON.stringify(fastest.legs) === JSON.stringify(fewest.legs);
   const res = { fastest, fewest: same ? null : fewest, query: q, direct_walk_min: null };
   if (from.type === "place" || to.type === "place") {
@@ -419,7 +449,7 @@ export function alternatives(g, fromEp, toEp, query = DEFAULT_QUERY, { max = 5, 
     searches++;
     const lab = search(g, from, to, { ...q, banLines: new Set(ban) }, "fastest");
     if (!lab) continue;
-    const r = buildRoute(g, lab);
+    const r = buildRoute(g, lab, q);
     add(r);
     for (const l of r.lines) if (!ban.includes(l)) queue.push([...ban, l]);
   }

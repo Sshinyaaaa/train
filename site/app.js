@@ -3,6 +3,9 @@ import { CONFIG } from "./config.js";
 import { createWalkService, walkAllowed } from "./walk.js";
 import { createFavStore, usableStorage } from "./favs.js";
 import { nearestStations } from "./nearby.js";
+import { buildSearchIndex, searchIndex } from "./search.js";
+import { queryString, paramsToState, hasSearchParams, nowInKL } from "./state.js";
+import { routeSummaryText, lastTrainText, clock } from "./share.js";
 import { loadNetwork, route, alternatives, suggestModes, blockedNearby, accessCandidates, linesNotRunning, DEFAULT_QUERY, MODES, MAX_WALK_OPTIONS, distanceM, walkSec } from "./router.js";
 
 // Photon geocoder (PLAN.md §4b): only the typed text (plus a fixed Klang Valley bbox) is sent.
@@ -80,6 +83,7 @@ function buildIndex() {
   for (const s of stations) counts[s.name.toLowerCase()] = (counts[s.name.toLowerCase()] || 0) + 1;
   for (const s of stations) s.dup = counts[s.name.toLowerCase()] > 1;
   stations.sort((a, b) => a.name.localeCompare(b.name));
+  searchIdx = buildSearchIndex(stations, net.aliases || []);
 }
 
 const badges = (lines) => `<span class="badges">${lines.map(badge).join("")}</span>`;
@@ -88,15 +92,10 @@ const stationLabel = (s) => (s.dup ? `${s.name} (${linesText(s.lines)})` : s.nam
 const stationById = (id) => stations.find((x) => x.id === id);
 const endpointLabel = (e) => (!e ? "" : e.type === "station" ? stationLabel(stationById(e.id)) : e.name);
 
+// Station names + aliases (overrides/aliases.json), typo-tolerant (PLAN.md §4h). [{s, alias}]
+let searchIdx = [];
 function searchStations(q) {
-  const k = q.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!k) return [];
-  const starts = [], contains = [];
-  for (const s of stations) {
-    const i = s.key.indexOf(k);
-    if (i === 0) starts.push(s); else if (i > 0) contains.push(s);
-  }
-  return starts.concat(contains).slice(0, 8);
+  return searchIndex(searchIdx, q).map((m) => ({ s: stationById(m.station), alias: m.alias })).filter((x) => x.s);
 }
 
 // --- Photon -------------------------------------------------------------------------------------
@@ -137,7 +136,7 @@ function setupPicker(role) {
   const compose = () => {
     const q = input.value.trim();
     const st = searchStations(q);
-    items = [{ kind: "here" }, ...st.map((s) => ({ kind: "station", s }))];
+    items = [{ kind: "here" }, ...st.map((m) => ({ kind: "station", s: m.s, alias: m.alias }))];
     if (q.length >= MIN_PLACE_CHARS && !isOnline()) {
       items.push({ kind: "info", html: "Place search needs internet. Showing stations only." });
     } else if (q.length >= MIN_PLACE_CHARS) {
@@ -161,7 +160,8 @@ function setupPicker(role) {
       const sel = `role="option" id="${role}-opt-${n}" aria-selected="${n === active}" data-n="${n}"`;
       if (it.kind === "here") return `<li ${sel}><span class="icon" aria-hidden="true">◎</span><span class="name">Current location</span></li>`;
       if (it.kind === "station") {
-        return `<li ${sel}>${badges(it.s.lines)}<span class="name">${esc(it.s.name)}<span class="lines">${esc(linesText(it.s.lines))}</span></span></li>`;
+        const via = it.alias ? `${esc(it.alias)} · ` : "";
+        return `<li ${sel}>${badges(it.s.lines)}<span class="name">${esc(it.s.name)}<span class="lines">${via}${esc(linesText(it.s.lines))}</span></span></li>`;
       }
       return `<li ${sel}><span class="icon" aria-hidden="true">⌖</span><span class="name">${esc(it.p.main)}<span class="lines">${esc(it.p.where)}</span></span></li>`;
     }).join("");
@@ -185,6 +185,7 @@ function setupPicker(role) {
     if (it.kind === "station") picked[role] = { type: "station", id: it.s.id };
     else picked[role] = { type: "place", lat: it.p.lat, lon: it.p.lon, name: it.p.where ? `${it.p.main}, ${it.p.where}` : it.p.main };
     input.value = endpointLabel(picked[role]);
+    syncClear(role);
     close(); save(); render(); afterPick(role);
   };
 
@@ -193,6 +194,7 @@ function setupPicker(role) {
     close();
     if (!("geolocation" in navigator)) { showMsg("This browser can't share your location. Type a station or place instead."); return; }
     input.value = "Locating…";
+    syncClear(role);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         picked[role] = { type: "place", lat: pos.coords.latitude, lon: pos.coords.longitude, name: "Current location", geo: true };
@@ -202,6 +204,7 @@ function setupPicker(role) {
       (err) => {
         picked[role] = null;
         input.value = "";
+        syncClear(role);
         showMsg(err.code === err.PERMISSION_DENIED
           ? "Location permission denied. Type a station or place instead."
           : "Couldn't get your location. Type a station or place instead.");
@@ -231,33 +234,58 @@ function setupPicker(role) {
     }, DEBOUNCE_MS);
   };
 
+  // Clear (× button, or Escape while focused): empties the field and the pick, keeps focus.
+  const clearField = () => {
+    clearTimeout(timer);
+    if (ctrl) ctrl.abort();
+    placeState = { status: "idle", results: [] };
+    const had = picked[role];
+    picked[role] = null;
+    input.value = "";
+    showMsg(""); close(); syncClear(role);
+    if (had) { updatePlaceMap(role); save(); render(); }
+    input.focus();
+  };
+  $(`${role}-clear`).addEventListener("click", clearField);
+
   input.addEventListener("input", () => {
     if (picked[role]) { picked[role] = null; updatePlaceMap(role); }
-    showMsg("");
+    showMsg(""); syncClear(role);
     scheduleGeocode();
     userMoved = false;
     compose(); active = defaultActive(); draw(); render();
   });
-  input.addEventListener("focus", () => { if (!picked[role]) { compose(); active = -1; draw(); } });
+  // Tapping a filled field selects all its text, so typing replaces it. The mouseup that follows the
+  // focusing tap would otherwise move the caret and drop the selection.
+  let selectOnUp = false;
+  input.addEventListener("focus", () => {
+    if (input.value) { input.select(); selectOnUp = true; }
+    if (!picked[role]) { compose(); active = -1; draw(); }
+  });
+  input.addEventListener("mouseup", (e) => { if (selectOnUp) { e.preventDefault(); selectOnUp = false; } });
   input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { if (input.value || picked[role]) clearField(); else close(); e.preventDefault(); return; }
     if (list.hidden) return;
     const sel = selectable();
     if (e.key === "ArrowDown") { userMoved = true; active = Math.min(active + 1, sel.length - 1); draw(); e.preventDefault(); }
     else if (e.key === "ArrowUp") { userMoved = true; active = Math.max(active - 1, 0); draw(); e.preventDefault(); }
     else if (e.key === "Enter") { if (sel[active]) choose(sel[active]); e.preventDefault(); }
-    else if (e.key === "Escape") close();
   });
   list.addEventListener("mousedown", (e) => {
     if (e.target.closest("a")) return; // attribution links
     const li = e.target.closest("li[data-n]");
     if (li) { e.preventDefault(); choose(selectable()[Number(li.dataset.n)]); }
   });
-  input.addEventListener("blur", () => setTimeout(close, 150));
+  input.addEventListener("blur", () => { selectOnUp = false; setTimeout(close, 150); });
+  return { locate };
 }
+
+const syncClear = (role) => { $(`${role}-clear`).hidden = !$(role).value; };
 
 function setPicked(role, ep) {
   picked[role] = ep;
   $(role).value = endpointLabel(ep);
+  syncClear(role);
   afterPick(role);
 }
 
@@ -378,7 +406,7 @@ function journeyHtml(r) {
       seg(c, false, `${badge(leg.line)} <strong>${esc(leg.line_name)}</strong><br>
         towards ${esc(stopName(leg.towards))}<br>
         ${leg.first ? `wait up to ${fmtMin(leg.headway_min)}` : `wait ~${fmtMin(leg.wait_min)}`} · ride ${fmtMin(leg.ride_min)}, ${leg.stops.length - 1} stop${leg.stops.length === 2 ? "" : "s"}
-        ${estTags(leg.flags)}
+        ${estTags(leg.flags)}${leg.last_train ? `<span class="est">last train ~${clock(leg.last_train.last_sec)}</span>` : ""}
         ${mid.length ? `<details class="stops"><summary>${mid.length} intermediate stop${mid.length === 1 ? "" : "s"}</summary>${mid.map(esc).join(" · ")}</details>` : ""}`);
       const next = r.legs[i + 1];
       if (!next) node(c, esc(stopName(leg.to)), "Arrive");
@@ -449,7 +477,9 @@ function routeCard(r, res, f, open, rank) {
       <div class="meta">${badges(lines)} ${changes}${r.walk_min > 0 ? ` · walk ~${fmtMin(r.walk_min)}` : ""}${fs ? ` · fare ${esc(fs)}` : ""}</div>
       <div class="meta">Expected ~${fmtMin(r.expected_min)} with an average first wait${r.transfer_wait_min > 0 ? ` · includes ~${fmtMin(r.transfer_wait_min)} waiting at changes` : ""}</div>
       ${r.excludes_far_access ? `<div class="meta">Times exclude getting to or from a station beyond your ${fmtDist(filters.maxWalkM)} max walk.</div>` : ""}
+      ${r.legs.filter((l) => l.last_train).map((l) => `<div class="note lasttrain"><strong>${l.last_train.missed ? "Last train may be gone" : "Last train"}:</strong> ${esc(lastTrainText(l, stopName(l.from)))}</div>`).join("")}
     </summary>
+    <div class="card-actions"><button type="button" class="chip share" data-share="${rank - 1}">Share</button><span class="share-msg" role="status"></span></div>
     ${fareHtml(r)}
     ${walkAlt}
     ${journeyHtml(r)}
@@ -486,6 +516,7 @@ function render() {
     }
     out.innerHTML = note + html;
     wireResultButtons(out);
+    syncUrl(q);
     return;
   }
   if (favs?.addTrip(from, to)) drawSaved();   // recent trips (PLAN.md §4g); skips current location
@@ -506,7 +537,79 @@ function render() {
       ? ` · Some fares aren't available (${esc([...new Set(items.flatMap((x) => x.f?.missing_names || []))].join(", "))}), so those routes are ranked by their known fares only` : ""}</p>` : "";
   out.innerHTML = note + sorter + items.map((x, i) => routeCard(x.r, res, x.f, i === 0, i + 1)).join("");
   out.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { sortBy = b.dataset.sort; render(); }));
+  out.querySelectorAll("[data-share]").forEach((b) => b.addEventListener("click", () => shareRoute(items[Number(b.dataset.share)], q, b)));
   wireResultButtons(out);
+  syncUrl(q);
+}
+
+// --- Share (PLAN.md §4h): plain-text summary to the clipboard -------------------------------------
+const plainName = (ep) => (ep.type === "station" ? stationById(ep.id).name : ep.name);
+const shareUrl = (q) => `${location.origin}${location.pathname}?${queryString({ from: picked.from, to: picked.to, day: q.day, time: q.time })}`;
+
+async function shareRoute(item, q, btn) {
+  if (!item) return;
+  const fs = fareShort(item.f);
+  const text = routeSummaryText(item.r, {
+    fromName: plainName(picked.from), toName: plainName(picked.to), day: q.day, time: q.time, stopName,
+    fare: fs === "check MyRapid" ? "Rapid KL: check fare on MyRapid" : fs || null,
+    fareKind: FARE_TYPE_TEXT[fareType].toLowerCase(), url: shareUrl(q),
+  });
+  const msg = btn.nextElementSibling;
+  try {
+    await navigator.clipboard.writeText(text);
+    msg.textContent = "Copied to clipboard.";
+  } catch {
+    // clipboard blocked (permissions, insecure context): show the text to copy by hand
+    msg.textContent = "Couldn't copy automatically. Select and copy:";
+    const ta = document.createElement("textarea");
+    ta.readOnly = true; ta.className = "share-text"; ta.value = text; ta.rows = Math.min(14, text.split("\n").length);
+    msg.append(ta);
+    ta.select();
+  }
+}
+
+// --- Shareable URL (PLAN.md §4h): ?from=&to=&day=&time= ------------------------------------------
+// Each search updates the URL; separate searches become history entries (back steps through them),
+// while quick successive changes (< 1.5 s, e.g. editing the time) replace the current entry.
+// Current location is written as "here", never as coordinates.
+let replaceNextUrl = true, lastUrlChange = 0, applyingUrl = false;
+function syncUrl(q) {
+  if (applyingUrl || !picked.from || !picked.to) return;
+  const qs = queryString({ from: picked.from, to: picked.to, day: q.day, time: q.time });
+  // compare normalised, so a shared link written with %3A escapes counts as the same search
+  const cur = new URLSearchParams(location.search).toString().replace(/%3A/gi, ":").replace(/%2C/gi, ",");
+  if (cur === qs) { replaceNextUrl = false; return; }
+  const url = `${location.pathname}?${qs}`, now = Date.now();
+  try {
+    if (replaceNextUrl || now - lastUrlChange < 1500) history.replaceState(null, "", url);
+    else history.pushState(null, "", url);
+  } catch { /* some embedded browsers block history changes */ }
+  replaceNextUrl = false; lastUrlChange = now;
+}
+
+// Restore a search from the URL (page load, or back/forward), then run it.
+const pickers = {};
+function applyUrlState(search) {
+  const st = paramsToState(search, net);
+  const now = nowInKL();
+  const askHere = [];
+  applyingUrl = true;
+  try {
+    $("day").value = st.day || now.day;
+    $("time").value = st.time || now.time;
+    for (const role of ["from", "to"]) {
+      const ep = st[role];
+      if (ep?.type === "here") { askHere.push(role); continue; }
+      if (ep) setPicked(role, ep);
+      else { picked[role] = null; $(role).value = ""; syncClear(role); updatePlaceMap(role); }
+    }
+    render();
+  } finally {
+    applyingUrl = false;
+  }
+  // this history entry already is that search, so the next new search adds an entry after it
+  replaceNextUrl = false;
+  for (const role of askHere) pickers[role].locate();   // asks for the location again
 }
 
 // Why no route: which lines at the origin can't be boarded at the chosen time (service hours / bands).
@@ -743,8 +846,8 @@ async function main() {
   net = await (await fetch("data/network.json")).json();
   graph = loadNetwork(net);
   buildIndex();
-  setupPicker("from");
-  setupPicker("to");
+  pickers.from = setupPicker("from");
+  pickers.to = setupPicker("to");
   $("swap").addEventListener("click", () => {
     const f = picked.from, t = picked.to;
     setPicked("from", t); setPicked("to", f); save(); render();
@@ -757,14 +860,24 @@ async function main() {
   setupOffline();
   $("day").addEventListener("change", render);
   $("time").addEventListener("change", render);
+  // Depart defaults to now (Malaysia time); "Now" resets it. Search re-runs (it also runs by itself).
+  $("now").addEventListener("click", () => { const n = nowInKL(); $("day").value = n.day; $("time").value = n.time; render(); });
+  $("form").addEventListener("submit", (e) => { e.preventDefault(); render(); });
+  window.addEventListener("popstate", () => applyUrlState(location.search));
   showBanner();
   if (CONFIG.contactEmail) {
     const c = $("contact");
     c.innerHTML = `Contact: <a href="mailto:${esc(CONFIG.contactEmail)}">${esc(CONFIG.contactEmail)}</a>`;
     c.hidden = false;
   }
-  restore();
-  render();
+  // A shared/bookmarked URL wins over the remembered stations.
+  if (hasSearchParams(location.search)) applyUrlState(location.search);
+  else {
+    const n = nowInKL();
+    $("day").value = n.day; $("time").value = n.time;
+    restore();
+    render();
+  }
 }
 
 main().catch((e) => { $("results").innerHTML = `<p class="msg">Could not load network data: ${esc(e.message)}</p>`; });

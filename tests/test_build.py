@@ -107,6 +107,18 @@ class Validation(unittest.TestCase):
         net["fares"]["systems"] = {}
         self.assertTrue(any("in 0 fare systems" in e for e in self.errors(net)))
 
+    def test_aliases(self):
+        net = tiny_net()
+        net["aliases"] = [{"alias": "Mall", "stops": ["x:a"], "stations": ["st:x:a"]},
+                          {"alias": "Ghost", "stops": ["x:zz"], "stations": []},
+                          {"alias": "  ", "stops": ["x:a"]},
+                          {"alias": "m-a-l-l", "stops": ["x:b"], "stations": ["st:x:b"]}]
+        errors, warnings = validate(net)
+        self.assertTrue(any("alias 'Ghost': unknown stop x:zz" in e for e in errors))
+        self.assertTrue(any("empty" in e for e in errors))
+        self.assertFalse(any("'Mall'" in e for e in errors))
+        self.assertTrue(any("alias 'm-a-l-l' duplicates 'Mall'" in w for w in warnings))
+
     def test_out_of_scope_ktmb_line(self):
         net = tiny_net()
         net["lines"]["ktmb:ETS"] = {"color": "#000", "display": {"number": "x", "name": "x", "mode": "KTM"}, "patterns": []}

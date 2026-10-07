@@ -83,6 +83,7 @@ overrides/
   display.json                map number + full name per line
   fares/operators.json        fare system per line, operator fare links
   fares/erl.json              ERL fare tables (source URL, retrieved date)
+  aliases.json                extra search names (landmarks, malls) -> line-stops (M8)
   lines/erl-klia-ekspres.json
   lines/erl-klia-transit.json
 scripts/
@@ -94,6 +95,7 @@ scripts/
 site/
   index.html, app.js, style.css, router.js, fares.js, theme.js, walk.js, config.js
   favs.js, nearby.js          favourites/recent trips, nearest stations (M7)
+  search.js, state.js, share.js   station search + aliases, URL state + "now", share text (M8)
   sw.js, manifest.webmanifest, icons/   offline + install (M7)
   data/network.json           committed; last good build
 tests/
@@ -559,6 +561,77 @@ Everything here stays on the device. Nothing new is sent to any server.
 - **Distance:** a station's distance is to its nearest line-stop, so a big interchange isn't
   measured from its centroid.
 
+## 4h. Quality-of-life batch (M8)
+
+**Fields:**
+- **Clear:** a × button inside From and To (shown when the field has text) clears the field and the
+  pick. **Escape** in a focused field clears it too.
+- **Select all:** tapping a filled field selects all its text, so typing replaces it.
+
+**Depart:**
+- On load, day and time default to **now in Kuala Lumpur** (`Intl` with `Asia/Kuala_Lumpur`, so a
+  device in another time zone still gets KL time).
+- Before 04:00, the previous day's type is used, because trains running after midnight belong to the
+  previous service day (GTFS 24:00+), and the router tries early times as +24 h.
+- **Now** resets day and time. Public holidays aren't detected (no holiday calendar), so pick
+  Sunday by hand.
+
+**Search:** runs by itself whenever both fields are set, as before. A **Search** button (also Enter)
+re-runs it.
+
+**Shareable URLs** (`site/state.js`): `?from=&to=&day=&time=`.
+- **Encoding:**
+  - A station is its id without `st:` (`rapid:KJ10`); a line-stop id also works.
+  - A typed place is `lat,lon` (5 decimals) plus `fromName` / `toName`.
+  - **Current location is always `here`, never coordinates.** Loading a URL with `here` asks for
+    the location again.
+  - Colons and commas are left unescaped, so links stay readable. Invalid parts are ignored.
+- **Updating:**
+  - Each search updates the URL. A new search becomes a new history entry, so **Back steps through
+    searches** (popstate restores and re-runs them). Changes less than 1.5 s apart (editing the
+    time) replace the entry, and re-running the same search adds nothing.
+  - **Loading** a URL with search parameters restores and runs that search, and wins over the
+    remembered stations.
+  - The first search on a page opened without parameters replaces that blank entry.
+
+**Share** (`site/share.js`): a Share button on each route copies a plain-text summary to the
+clipboard:
+- endpoints, day/time, journey time, legs, the fare and type, last-train warnings, the estimate
+  note and the link
+- the current location appears as "Current location" and `here`
+
+If the clipboard is blocked, the text is shown in a box to copy by hand.
+
+**Last-train warnings** (`router.js` `lastBoarding` / `lastTrainCheck`):
+- **Data recorded:** for each ride, the router records when you reach the platform (departure time
+  + cost so far) and the line's last boarding at that stop, using the same data that decides
+  whether a train can be boarded:
+  - `service_hours` end + run time to the stop (ERL, from ERL's timetable)
+  - otherwise the end of the day's last headway band (GTFS)
+- **When it warns:** if the last boarding is ≤ 30 min after you reach the platform, or less than
+  one headway (one worst-case wait) after it. Wording: "The last X train from Y leaves around
+  HH:MM…".
+- **Missed train:** if you'd reach the platform after the last boarding, the card says the last
+  train may be gone. The router itself doesn't board outside service hours, so this shows only at
+  the edges of the model.
+- **Where it shows:** in the card summary (visible while collapsed), as a tag on the leg, and in
+  the shared text.
+- **Caveat:** "around": for GTFS lines the last band end is a frequency model, not a timetabled
+  last train.
+
+**Station aliases + typo-tolerant search** (`overrides/aliases.json` → `network.json` `aliases`,
+`site/search.js`):
+- **Alias entries:** an entry is `{alias, stops: [line-stop ids]}`; the build adds the stations.
+  Validation errors on an unknown stop or an empty alias, and warns on a duplicate alias.
+- **Starter list:** 30 entries, e.g. Suria KLCC, TRX, Mid Valley Megamall, Pavilion KL, Sunway
+  Pyramid, 1 Utama, Nu Sentral, TBS, klia2. The owner reviews and extends it.
+- **Ranking:**
+  - Exact → name starts with → a word starts with → contains.
+  - Aliases rank just below an equal name match.
+  - Then typo matches by edit distance (insert, delete, substitute, swap): 1 for queries of 4–5
+    characters, 2 for longer, none below 4.
+  - A suggestion found through an alias shows the alias ("Pavilion KL · MRT Kajang Line").
+
 ## 5. Validation checks (`scripts/validate.py`, run by the build)
 
 Errors: the build writes nothing, and CI doesn't deploy. Warnings: stored in `meta.warnings`,
@@ -646,6 +719,22 @@ and the site shows a banner.
   - clear all
   - storage that throws or is missing (in-memory fallback)
 - `tests/nearby.test.mjs`: nearest 5 order and nearest-line-stop distance.
+- `tests/search.test.mjs`:
+  - edit distance
+  - name and alias ranking (a name beats an alias on a tie)
+  - real aliases (TRX, Pavilion, Mid Valley, klia2, TBS → both stations)
+  - typos (extra, missing and swapped letters, and typos in aliases)
+  - no typo matching for short queries
+- `tests/state.test.mjs`:
+  - URL round-trips for stations and places
+  - `here` never carries coordinates
+  - readable query strings, and invalid values ignored
+  - `nowInKL` across time zones and the before-04:00 rule
+- `tests/lasttrain-share.test.mjs`:
+  - `lastBoarding` / `lastTrainCheck` rules
+  - real KLIA Transit warnings at 23:40, none at 11:00
+  - a later leg uses its own platform time
+  - share text format, with no coordinates for places
 - `tests/sw.test.mjs` runs `sw.js` in a sandbox with a fake Cache API and a fake server:
   - install precaches and activate cleans up
   - offline answers from the cache
@@ -710,7 +799,9 @@ fallback. To update it, rebuild locally and commit.
    - That also covers the 05:00 Salak Tinggi train and ERL's public-holiday timetable.
 8. **M7 – favourites, offline, nearby stations:** saved Home, Work and custom places, the last 5
    trips, an installable offline PWA, and the 5 nearest stations (§4g).
-9. **Later / optional:**
+9. **M8 – QoL batch:** clear buttons, depart "Now", Search button, shareable URLs with history,
+   Share, last-train warnings, station aliases and typo-tolerant search (§4h).
+10. **Later / optional:**
    - Skypark line
    - Ekspres all-stop after 23:00
    - Transit peak headway once the peak hours are known

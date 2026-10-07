@@ -299,5 +299,21 @@ details.card.alt[open] > summary::after { content: "▾"; }
 .nearby-list .lines { display: block; color: var(--muted); font-size: .78rem; }
 .nearby-list .dist { color: var(--muted); font-size: .85rem; white-space: nowrap; }
 
+/* ---- QoL: clear button, Now/Search, last-train notes, share (PLAN.md §4h) ----------------- */
+.field { position: relative; }
+.field input[type=text] { padding-right: 44px; }
+.clear {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; border: 0; background: none; color: var(--muted);
+  font: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer;
+}
+.clear:hover { color: var(--text); }
+.when .chip { min-height: 44px; color: var(--text); }
+.when .go { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.note.lasttrain { margin-top: 8px; }
+.card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0 4px; }
+.card-actions .chip { color: var(--text); }
+.share-msg { font-size: .82rem; color: var(--muted); flex: 1 1 200px; }
+.share-text { display: block; width: 100%; margin-top: 6px; font: inherit; font-size: .8rem; color: var(--text); background: var(--field); border: 2px solid var(--field-line); padding: 6px; }
 /* the hidden attribute always wins over display rules like .filter-row { display: flex } */
 [hidden] { display: none !important; }

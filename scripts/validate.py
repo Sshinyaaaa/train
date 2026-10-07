@@ -63,6 +63,23 @@ def validate(net, today=None):
         if not line.get("color"):
             errors.append(f"{lid}: no colour")
 
+    # search aliases: non-empty text, known stops, no duplicate alias (case/spacing-insensitive)
+    seen_alias = {}
+    for a in net.get("aliases", []):
+        text = (a.get("alias") or "").strip()
+        key = "".join(c for c in text.lower() if c.isalnum())
+        if not key:
+            errors.append(f"alias {a.get('alias')!r}: empty")
+            continue
+        if not a.get("stops"):
+            errors.append(f"alias {text!r}: no stops")
+        for s in a.get("stops", []):
+            if s not in net["stops"]:
+                errors.append(f"alias {text!r}: unknown stop {s}")
+        if key in seen_alias:
+            warnings.append(f"alias {text!r} duplicates {seen_alias[key]!r}")
+        seen_alias[key] = text
+
     # fares: every line in exactly one fare system; table stops exist on that system's line
     fares = net.get("fares")
     if fares:

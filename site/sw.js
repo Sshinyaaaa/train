@@ -4,7 +4,7 @@
 // next online visit, network.json included) and fall back to the cache when offline or slow.
 // Cross-origin requests (Photon, OSRM, OSM tiles, Leaflet, fonts) are never intercepted or cached.
 
-const VERSION = "1";                       // bump when this file or PRECACHE changes
+const VERSION = "2";                       // bump when this file or PRECACHE changes
 const CACHE = `klrail-${VERSION}`;
 const SLOW_MS = 4000;                      // with a cached copy, don't wait longer than this
 const PRECACHE = [
@@ -18,6 +18,9 @@ const PRECACHE = [
   "config.js",
   "favs.js",
   "nearby.js",
+  "search.js",
+  "state.js",
+  "share.js",
   "theme.js",
   "manifest.webmanifest",
   "icons/icon-192.png",
